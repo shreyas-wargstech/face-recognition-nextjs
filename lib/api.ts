@@ -143,6 +143,11 @@ export const faceAPI = {
     const response = await api.get('/api/v1/stats')
     return response.data
   },
+
+  async fetchAllUsers () {
+    const response = await api.get('/api/v1/users')
+    return response.data
+  }
 }
 
 export default api

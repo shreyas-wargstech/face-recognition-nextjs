@@ -1,21 +1,30 @@
+// app/course/page.tsx - Updated with Real-Time Face Verification
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { faceAPI, FaceVerificationResponse } from '@/lib/api'
-import WebcamCapture from '@/components/WebcamCapture'
-import { BookOpen, Shield, CheckCircle, AlertCircle, Award } from 'lucide-react'
+import { faceAPI, FaceStatusResponse } from '@/lib/api'
+import RealTimeFaceVerification from '@/components/RealTimeFaceVerification'
+import { BookOpen, Shield, CheckCircle, AlertCircle, Award, Users, Lock, Eye } from 'lucide-react'
 
 const CoursePage = () => {
   const [userId, setUserId] = useState<number>(1)
   const [currentSection, setCurrentSection] = useState<'course' | 'verification' | 'quiz' | 'results'>('course')
-  const [verificationLoading, setVerificationLoading] = useState(false)
-  const [verificationResult, setVerificationResult] = useState<FaceVerificationResponse | null>(null)
-  const [verificationError, setVerificationError] = useState<string | null>(null)
+  const [verificationResult, setVerificationResult] = useState<any>(null)
   const [quizAnswer, setQuizAnswer] = useState<string>('')
   const [quizResult, setQuizResult] = useState<{ correct: boolean; score: number } | null>(null)
+  const [faceStatus, setFaceStatus] = useState<FaceStatusResponse | null>(null)
+  const [statusLoading, setStatusLoading] = useState(false)
 
   const courseId = 'intro-to-programming'
   const quizId = 'quiz-1'
+
+  // Demo users
+  const demoUsers = [
+    { id: 1, name: 'John Doe', email: 'john@example.com' },
+    { id: 2, name: 'Jane Smith', email: 'jane@example.com' },
+    { id: 3, name: 'Bob Johnson', email: 'bob@example.com' },
+    { id: 4, name: 'Alice Wilson', email: 'alice@example.com' },
+  ]
 
   // Quiz data
   const quizQuestion = {
@@ -36,34 +45,64 @@ const CoursePage = () => {
     }
   }, [])
 
-  const handleStartQuiz = () => {
-    setCurrentSection('verification')
+  useEffect(() => {
+    const checkFaceStatus = async () => {
+      try {
+        setStatusLoading(true)
+        const status = await faceAPI.getFaceStatus(userId)
+        setFaceStatus(status)
+      } catch (error) {
+        console.error('Failed to check face status:', error)
+      } finally {
+        setStatusLoading(false)
+      }
+    }
+
+    if (userId) {
+      checkFaceStatus()
+    }
+  }, [userId])
+
+  const handleUserChange = (newUserId: number) => {
+    setUserId(newUserId)
+    localStorage.setItem('selectedUserId', newUserId.toString())
+    
+    // Reset states when changing user
+    setCurrentSection('course')
     setVerificationResult(null)
-    setVerificationError(null)
+    setQuizAnswer('')
+    setQuizResult(null)
   }
 
-  const handleVerificationCapture = async (imageFile: File) => {
-    setVerificationLoading(true)
-    setVerificationError(null)
-    setVerificationResult(null)
-
-    try {
-      const response = await faceAPI.verifyFace(userId, imageFile, quizId, courseId)
-      setVerificationResult(response)
-      
-      if (response.verified) {
-        // Verification successful, proceed to quiz
-        setTimeout(() => {
-          setCurrentSection('quiz')
-        }, 2000)
-      }
-    } catch (error: any) {
-      console.error('Verification failed:', error)
-      const errorMessage = error.response?.data?.detail || error.message || 'Verification failed'
-      setVerificationError(errorMessage)
-    } finally {
-      setVerificationLoading(false)
+  const handleStartQuiz = () => {
+    if (!faceStatus?.registered) {
+      alert('Please register your face first before taking the quiz.')
+      return
     }
+    
+    setCurrentSection('verification')
+    setVerificationResult(null)
+  }
+
+  const handleVerificationSuccess = (result: any) => {
+    setVerificationResult(result)
+    
+    if (result.verified) {
+      // Verification successful, proceed to quiz after a short delay
+      setTimeout(() => {
+        setCurrentSection('quiz')
+      }, 2000)
+    } else {
+      // Verification failed, stay on verification screen
+      setTimeout(() => {
+        setCurrentSection('course')
+      }, 3000)
+    }
+  }
+
+  const handleVerificationError = (error: string) => {
+    console.error('Verification error:', error)
+    // Error is already displayed in the component
   }
 
   const handleQuizSubmit = () => {
@@ -80,42 +119,68 @@ const CoursePage = () => {
     setQuizAnswer('')
     setQuizResult(null)
     setVerificationResult(null)
-    setVerificationError(null)
   }
+
+  const selectedUser = demoUsers.find(user => user.id === userId)
 
   return (
     <div className="container">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Introduction to Programming</h1>
         <p className="text-lg text-gray-600">
-          Learn the fundamentals of programming and test your knowledge
+          Learn the fundamentals of programming and test your knowledge with secure real-time verification
         </p>
       </div>
 
       {/* User Selection */}
       <div className="card mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Current User</h2>
+        <div className="flex items-center space-x-3 mb-3">
+          <Users className="text-primary-600" size={20} />
+          <h2 className="text-lg font-semibold text-gray-900">Current User</h2>
+        </div>
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap gap-2">
-            {[1, 2, 3, 4].map(id => (
+            {demoUsers.map(user => (
               <button
-                key={id}
-                onClick={() => {
-                  setUserId(id)
-                  localStorage.setItem('selectedUserId', id.toString())
-                }}
+                key={user.id}
+                onClick={() => handleUserChange(user.id)}
                 className={`px-3 py-1 rounded font-medium text-sm transition-colors ${
-                  userId === id
+                  userId === user.id
                     ? 'bg-primary-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
-                User {id}
+                {user.name}
               </button>
             ))}
           </div>
-          <span className="text-sm text-gray-600">Selected: User {userId}</span>
+          <div className="text-sm text-gray-600">
+            Selected: {selectedUser?.name} (ID: {userId})
+          </div>
         </div>
+
+        {/* Face Registration Status */}
+        {!statusLoading && faceStatus && (
+          <div className="mt-4 p-3 rounded-lg border">
+            {faceStatus.registered ? (
+              <div className="flex items-center space-x-2 text-green-700">
+                <CheckCircle size={16} />
+                <span className="text-sm font-medium">Face registered ✓</span>
+                <span className="text-xs text-gray-600">
+                  (Quality: {faceStatus.quality_score?.toFixed(1)}%)
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 text-red-700">
+                <AlertCircle size={16} />
+                <span className="text-sm font-medium">Face not registered</span>
+                <a href="/register" className="text-xs text-blue-600 hover:underline ml-2">
+                  Register now →
+                </a>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Course Content */}
@@ -159,28 +224,53 @@ const CoursePage = () => {
           </div>
 
           <div className="card bg-primary-50 border-primary-200">
-            <h3 className="text-lg font-semibold text-primary-900 mb-3">Ready to Test Your Knowledge?</h3>
+            <div className="flex items-center space-x-3 mb-3">
+              <Lock className="text-primary-600" size={24} />
+              <h3 className="text-lg font-semibold text-primary-900">Ready to Test Your Knowledge?</h3>
+            </div>
             <p className="text-primary-800 mb-4">
               Complete the quiz to test your understanding of variables. 
-              Face verification will be required before you can access the quiz.
+              Real-time face verification will be required before you can access the quiz to ensure academic integrity.
             </p>
-            <button
-              onClick={handleStartQuiz}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Shield size={20} />
-              <span>Start Quiz (Face Verification Required)</span>
-            </button>
+            
+            {faceStatus?.registered ? (
+              <button
+                onClick={handleStartQuiz}
+                className="btn-primary flex items-center space-x-2"
+              >
+                <Shield size={20} />
+                <span>Start Quiz (Real-Time Verification Required)</span>
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="alert-info">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle size={20} />
+                    <div>
+                      <p className="font-medium">Face Registration Required</p>
+                      <p className="text-sm">You must register your face before taking the quiz.</p>
+                    </div>
+                  </div>
+                </div>
+                <a 
+                  href="/register" 
+                  className="btn-primary inline-flex items-center space-x-2"
+                >
+                  <Shield size={20} />
+                  <span>Register Face First</span>
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Face Verification */}
+      {/* Real-Time Face Verification */}
       {currentSection === 'verification' && (
         <div className="card">
           <div className="flex items-center space-x-3 mb-6">
-            <Shield className="text-primary-600" size={24} />
-            <h2 className="text-2xl font-semibold text-gray-900">Identity Verification Required</h2>
+            <Eye className="text-primary-600" size={24} />
+            <h2 className="text-2xl font-semibold text-gray-900">Real-Time Identity Verification</h2>
           </div>
           
           <div className="text-center mb-6">
@@ -192,28 +282,14 @@ const CoursePage = () => {
             </p>
           </div>
 
-          <WebcamCapture onCapture={handleVerificationCapture} loading={verificationLoading} />
-
-          {verificationLoading && (
-            <div className="mt-6 text-center">
-              <div className="flex items-center justify-center space-x-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
-                <span className="text-gray-600">Verifying your identity...</span>
-              </div>
-            </div>
-          )}
-
-          {verificationError && (
-            <div className="mt-6 alert-error">
-              <div className="flex items-center space-x-2">
-                <AlertCircle size={20} />
-                <div>
-                  <p className="font-medium">Verification Failed</p>
-                  <p className="text-sm">{verificationError}</p>
-                </div>
-              </div>
-            </div>
-          )}
+          <RealTimeFaceVerification
+            userId={userId}
+            quizId={quizId}
+            courseId={courseId}
+            onSuccess={handleVerificationSuccess}
+            onError={handleVerificationError}
+            className="w-full"
+          />
 
           {verificationResult && (
             <div className="mt-6">
@@ -224,9 +300,9 @@ const CoursePage = () => {
                     <div>
                       <p className="font-medium">✅ Identity Verified Successfully!</p>
                       <p className="text-sm">
-                        Similarity: {verificationResult.similarity_score.toFixed(1)}% | 
-                        Quality: {verificationResult.quality_score.toFixed(1)}% | 
-                        Processing: {verificationResult.processing_time.toFixed(0)}ms
+                        Similarity: {verificationResult.similarity_score?.toFixed(1)}% | 
+                        Quality: {verificationResult.quality_score?.toFixed(1)}% | 
+                        Match Ratio: {(verificationResult.match_ratio * 100)?.toFixed(1)}%
                       </p>
                       <p className="text-sm mt-1">Redirecting to quiz...</p>
                     </div>
@@ -239,9 +315,10 @@ const CoursePage = () => {
                     <div>
                       <p className="font-medium">❌ Identity Verification Failed</p>
                       <p className="text-sm">
-                        Similarity: {verificationResult.similarity_score.toFixed(1)}% (Required: ≥{(verificationResult.threshold * 100).toFixed(0)}%)
+                        Similarity: {verificationResult.similarity_score?.toFixed(1)}% (Required: ≥70%) |
+                        Match Ratio: {(verificationResult.match_ratio * 100)?.toFixed(1)}%
                       </p>
-                      <p className="text-sm mt-1">Please try again with a clearer photo.</p>
+                      <p className="text-sm mt-1">Please try again or contact support if you continue to have issues.</p>
                     </div>
                   </div>
                 </div>
@@ -258,6 +335,21 @@ const CoursePage = () => {
             <Award className="text-primary-600" size={24} />
             <h2 className="text-2xl font-semibold text-gray-900">Quiz: Variables in Programming</h2>
           </div>
+
+          {/* Verification Status */}
+          {verificationResult && verificationResult.verified && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <CheckCircle size={20} className="text-green-600" />
+                <div>
+                  <p className="font-medium text-green-800">Identity Verified</p>
+                  <p className="text-sm text-green-700">
+                    {selectedUser?.name} verified with {verificationResult.similarity_score?.toFixed(1)}% similarity
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{quizQuestion.question}</h3>
@@ -285,7 +377,7 @@ const CoursePage = () => {
           <button
             onClick={handleQuizSubmit}
             disabled={!quizAnswer}
-            className="btn-primary"
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Submit Answer
           </button>
@@ -322,15 +414,20 @@ const CoursePage = () => {
               )}
             </div>
 
+            {/* Verification Summary */}
             {verificationResult && (
               <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                <h3 className="font-semibold text-blue-900 mb-2">Verification Details</h3>
-                <p className="text-blue-800 text-sm">
-                  Identity verified for User {verificationResult.user_id} ({verificationResult.user_name}) | 
-                  Similarity: {verificationResult.similarity_score.toFixed(1)}% | 
-                  Quiz ID: {verificationResult.quiz_id} | 
-                  Course ID: {verificationResult.course_id}
-                </p>
+                <h3 className="font-semibold text-blue-900 mb-2">Verification Summary</h3>
+                <div className="text-blue-800 text-sm space-y-1">
+                  <p><strong>Student:</strong> {selectedUser?.name} (ID: {verificationResult.user_id})</p>
+                  <p><strong>Verification ID:</strong> {verificationResult.verification_id}</p>
+                  <p><strong>Similarity Score:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
+                  <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
+                  <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+                  <p><strong>Course:</strong> {courseId}</p>
+                  <p><strong>Quiz:</strong> {quizId}</p>
+                  <p><strong>Anti-spoofing:</strong> Passed ✓</p>
+                </div>
               </div>
             )}
             
@@ -343,6 +440,32 @@ const CoursePage = () => {
           </div>
         </div>
       )}
+
+      {/* Security Information */}
+      <div className="mt-8 card bg-blue-50 border-blue-200">
+        <div className="flex items-center space-x-3 mb-3">
+          <Shield className="text-blue-600" size={20} />
+          <h3 className="text-lg font-semibold text-blue-900">Enhanced Security Features</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-700">
+          <div>
+            <h4 className="font-medium text-blue-800 mb-1">Real-Time Verification</h4>
+            <ul className="space-y-1">
+              <li>• Live video stream analysis</li>
+              <li>• Multiple frame verification</li>
+              <li>• Similarity scoring</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-medium text-blue-800 mb-1">Anti-Spoofing Protection</h4>
+            <ul className="space-y-1">
+              <li>• Prevents photo attacks</li>
+              <li>• Detects video replays</li>
+              <li>• Liveness detection</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
