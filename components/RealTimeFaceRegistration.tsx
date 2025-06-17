@@ -1,17 +1,17 @@
-// components/RealTimeFaceRegistration.tsx
+// components/OptimizedRealTimeFaceRegistration.tsx
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Camera, CheckCircle, AlertCircle, Shield, StopCircle, PlayCircle, Loader } from 'lucide-react'
+import { Camera, CheckCircle, AlertCircle, Shield, StopCircle, PlayCircle, Loader, Wifi, WifiOff } from 'lucide-react'
 
-interface RealTimeFaceRegistrationProps {
+interface OptimizedRealTimeFaceRegistrationProps {
   userId: number
   onSuccess?: (result: any) => void
   onError?: (error: string) => void
   className?: string
 }
 
-const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({ 
+const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrationProps> = ({ 
   userId, 
   onSuccess, 
   onError, 
@@ -22,25 +22,69 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   const wsRef = useRef<WebSocket | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const [isStreaming, setIsStreaming] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
+  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'reconnecting'>('disconnected')
   const [status, setStatus] = useState<string>('Ready to start registration')
   const [framesCollected, setFramesCollected] = useState(0)
-  const [requiredFrames, setRequiredFrames] = useState(10)
+  const [framesSent, setFramesSent] = useState(0)
+  const [requiredFrames, setRequiredFrames] = useState(3)
   const [qualityScore, setQualityScore] = useState<number | null>(null)
   const [antispoofingScore, setAntispoofingScore] = useState<number | null>(null)
+  const [processingTime, setProcessingTime] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [sessionData, setSessionData] = useState<any>(null)
+  const [retryCount, setRetryCount] = useState(0)
+  const [networkLatency, setNetworkLatency] = useState<number | null>(null)
+
+  // Optimized settings
+  const MAX_RETRIES = 3
+  const RECONNECT_DELAY = 3000
+  const FRAME_CAPTURE_INTERVAL = 1000 // Slower: 1 second between frames
+  const FRAME_QUALITY = 0.6 // Lower quality for faster processing
+  const MAX_FRAME_SIZE = { width: 480, height: 360 } // Smaller frames
+  const HEARTBEAT_INTERVAL = 20000 // 20 seconds
+  const CONNECTION_TIMEOUT = 15000 // 15 seconds
+
+  const buildWebSocketUrl = useCallback(() => {
+    const baseUrl = `ws://localhost:8000/ws/face-registration/${userId}`
+    return baseUrl
+  }, [userId])
+
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current)
+    }
+
+    heartbeatRef.current = setInterval(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const pingStart = Date.now()
+        wsRef.current.send(JSON.stringify({ 
+          type: 'ping', 
+          timestamp: pingStart 
+        }))
+      }
+    }, HEARTBEAT_INTERVAL)
+  }, [])
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current)
+      heartbeatRef.current = null
+    }
+  }, [])
 
   const startVideoStream = useCallback(async () => {
     try {
       const constraints = {
         video: {
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 },
-          frameRate: { ideal: 15, max: 30 },
+          width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
+          height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
+          frameRate: { ideal: 15, max: 20 }, // Lower frame rate
           facingMode: 'user'
         },
         audio: false
@@ -53,105 +97,172 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
         videoRef.current.srcObject = stream
       }
 
-      // Initialize WebSocket connection
-      const wsUrl = `ws://localhost:8000/ws/face-registration/${userId}`
+      return true
+    } catch (error) {
+      console.error('Error accessing camera:', error)
+      setError('Failed to access camera. Please check permissions.')
+      if (onError) {
+        onError('Camera access failed')
+      }
+      return false
+    }
+  }, [onError])
+
+  const connectWebSocket = useCallback(async () => {
+    if (wsRef.current) {
+      wsRef.current.close()
+    }
+
+    setConnectionState('connecting')
+    setError(null)
+
+    try {
+      const wsUrl = buildWebSocketUrl()
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
+      // Connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.close()
+          setError('Connection timeout')
+          setConnectionState('disconnected')
+        }
+      }, CONNECTION_TIMEOUT)
+
       ws.onopen = () => {
+        clearTimeout(connectionTimeout)
         setIsConnected(true)
+        setConnectionState('connected')
         setStatus('Connected. Initializing registration...')
+        setRetryCount(0)
+        startHeartbeat()
         console.log('🔗 WebSocket connected for face registration')
       }
 
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data)
-        console.log('📨 Received message:', message)
+        try {
+          const message = JSON.parse(event.data)
+          console.log('📨 Received message:', message.type)
 
-        switch (message.type) {
-          case 'connected':
-            setRequiredFrames(message.required_frames)
-            setStatus(`Registration ready. Please look at the camera. Need ${message.required_frames} good frames.`)
-            setIsStreaming(true)
-            startFrameCapture()
-            break
+          switch (message.type) {
+            case 'connected':
+              setRequiredFrames(message.required_frames)
+              setStatus(`Registration ready. Please look at the camera. Need ${message.required_frames} good frames.`)
+              setIsStreaming(true)
+              startFrameCapture()
+              break
 
-          case 'frame_processed':
-            if (message.success) {
-              setFramesCollected(message.frames_collected)
-              setQualityScore(message.quality_score)
+            case 'frame_processed':
+              if (message.success) {
+                setFramesCollected(message.frames_collected)
+                setQualityScore(message.quality_score)
+                setAntispoofingScore(message.antispoofing_score)
+                setProcessingTime(message.processing_time)
+                setStatus(message.message)
+                setError(null)
+              } else {
+                setStatus(message.message)
+                setProcessingTime(message.processing_time)
+              }
+              break
+
+            case 'spoofing_detected':
+              setError(message.message)
+              setStatus('⚠️ Spoofing detected! Please use your real face.')
               setAntispoofingScore(message.antispoofing_score)
-              setStatus(message.message)
-              setError(null)
-            } else {
-              setStatus(message.message)
-              // Don't set error for temporary quality issues
-            }
-            break
+              break
 
-          case 'spoofing_detected':
-            setError(message.message)
-            setStatus('⚠️ Spoofing detected! Please use your real face.')
-            setAntispoofingScore(message.antispoofing_score)
-            break
+            case 'registration_complete':
+              setSuccess(true)
+              setSessionData(message)
+              setStatus('✅ Face registration completed successfully!')
+              stopStreaming()
+              if (onSuccess) {
+                onSuccess(message)
+              }
+              break
 
-          case 'registration_complete':
-            setSuccess(true)
-            setSessionData(message)
-            setStatus('✅ Face registration completed successfully!')
-            stopStreaming()
-            if (onSuccess) {
-              onSuccess(message)
-            }
-            break
+            case 'error':
+              setError(message.message)
+              setStatus(`❌ Error: ${message.message}`)
+              if (onError) {
+                onError(message.message)
+              }
+              break
 
-          case 'error':
-            setError(message.message)
-            setStatus(`❌ Error: ${message.message}`)
-            if (onError) {
-              onError(message.message)
-            }
-            break
+            case 'pong':
+              if (message.timestamp) {
+                const latency = Date.now() - message.timestamp
+                setNetworkLatency(latency)
+              }
+              break
+
+            case 'heartbeat':
+              // Server heartbeat received
+              break
+
+            case 'timeout_warning':
+              setError(message.message)
+              setStatus('⚠️ Connection issue detected')
+              break
+
+            default:
+              console.log('Unknown message type:', message.type)
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error)
         }
       }
 
       ws.onerror = (error) => {
         console.error('❌ WebSocket error:', error)
+        clearTimeout(connectionTimeout)
         setError('Connection error occurred')
-        setStatus('❌ Connection failed')
-        if (onError) {
-          onError('WebSocket connection failed')
-        }
+        setConnectionState('disconnected')
       }
 
       ws.onclose = (event) => {
+        clearTimeout(connectionTimeout)
         setIsConnected(false)
         setIsStreaming(false)
+        stopHeartbeat()
+        
         console.log('❌ WebSocket closed:', event.code, event.reason)
         
         if (event.code === 4004) {
           setError('User not found')
           setStatus('❌ User not found')
-        } else if (!success) {
-          setStatus('Connection closed')
+          setConnectionState('disconnected')
+        } else if (!success && retryCount < MAX_RETRIES) {
+          // Auto-reconnect logic
+          setConnectionState('reconnecting')
+          setStatus(`Connection lost. Reconnecting... (${retryCount + 1}/${MAX_RETRIES})`)
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            setRetryCount(prev => prev + 1)
+            connectWebSocket()
+          }, RECONNECT_DELAY)
+        } else {
+          setConnectionState('disconnected')
+          if (!success) {
+            setStatus('Connection failed. Please try again.')
+          }
         }
       }
 
     } catch (error) {
-      console.error('Error accessing camera:', error)
-      setError('Failed to access camera. Please check permissions.')
-      setStatus('❌ Camera access failed')
-      if (onError) {
-        onError('Camera access failed')
-      }
+      console.error('WebSocket creation error:', error)
+      setError('Failed to create connection')
+      setConnectionState('disconnected')
     }
-  }, [userId, onSuccess, onError, success])
+  }, [buildWebSocketUrl, success, retryCount, onSuccess, onError, startHeartbeat, stopHeartbeat])
 
   const startFrameCapture = useCallback(() => {
     if (!intervalRef.current) {
       intervalRef.current = setInterval(() => {
         captureAndSendFrame()
-      }, 200) // Send frame every 200ms (5 FPS)
+      }, FRAME_CAPTURE_INTERVAL) // Slower capture rate
     }
   }, [])
 
@@ -168,24 +279,27 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       return
     }
 
-    // Set canvas dimensions
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-
-    // Draw current frame
-    ctx.drawImage(video, 0, 0)
-
-    // Convert to base64
-    const frameData = canvas.toDataURL('image/jpeg', 0.8)
-
-    // Send frame to WebSocket
     try {
+      // Set smaller canvas dimensions for faster processing
+      canvas.width = MAX_FRAME_SIZE.width
+      canvas.height = MAX_FRAME_SIZE.height
+
+      // Draw and resize frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Convert to base64 with lower quality
+      const frameData = canvas.toDataURL('image/jpeg', FRAME_QUALITY)
+
+      // Send frame to WebSocket
       wsRef.current.send(JSON.stringify({
         type: 'frame',
-        frame: frameData
+        frame: frameData,
+        timestamp: Date.now()
       }))
+
+      setFramesSent(prev => prev + 1)
     } catch (error) {
-      console.error('Error sending frame:', error)
+      console.error('Error capturing/sending frame:', error)
     }
   }, [])
 
@@ -196,10 +310,23 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       intervalRef.current = null
     }
 
+    // Stop heartbeat
+    stopHeartbeat()
+
+    // Clear reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+
     // Close WebSocket
     if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'stop' }))
-      wsRef.current.close()
+      try {
+        wsRef.current.send(JSON.stringify({ type: 'stop' }))
+        wsRef.current.close(1000, 'User stopped')
+      } catch (error) {
+        console.error('Error closing WebSocket:', error)
+      }
       wsRef.current = null
     }
 
@@ -211,7 +338,15 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
 
     setIsStreaming(false)
     setIsConnected(false)
-  }, [])
+    setConnectionState('disconnected')
+  }, [stopHeartbeat])
+
+  const handleStart = useCallback(async () => {
+    const videoStarted = await startVideoStream()
+    if (videoStarted) {
+      await connectWebSocket()
+    }
+  }, [startVideoStream, connectWebSocket])
 
   const handleStop = useCallback(() => {
     stopStreaming()
@@ -222,12 +357,16 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
     setSuccess(false)
     setError(null)
     setFramesCollected(0)
+    setFramesSent(0)
     setQualityScore(null)
     setAntispoofingScore(null)
+    setProcessingTime(null)
     setSessionData(null)
+    setRetryCount(0)
+    setNetworkLatency(null)
     setStatus('Ready to start registration')
-    startVideoStream()
-  }, [startVideoStream])
+    handleStart()
+  }, [handleStart])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -235,6 +374,31 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       stopStreaming()
     }
   }, [stopStreaming])
+
+  const getConnectionIcon = () => {
+    switch (connectionState) {
+      case 'connected':
+        return <Wifi size={16} className="text-green-500" />
+      case 'connecting':
+      case 'reconnecting':
+        return <Loader size={16} className="text-yellow-500 animate-spin" />
+      default:
+        return <WifiOff size={16} className="text-red-500" />
+    }
+  }
+
+  const getConnectionText = () => {
+    switch (connectionState) {
+      case 'connected':
+        return `Connected ${networkLatency ? `(${networkLatency}ms)` : ''}`
+      case 'connecting':
+        return 'Connecting...'
+      case 'reconnecting':
+        return `Reconnecting... (${retryCount}/${MAX_RETRIES})`
+      default:
+        return 'Disconnected'
+    }
+  }
 
   return (
     <div className={`flex flex-col items-center space-y-6 ${className}`}>
@@ -245,31 +409,28 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
           autoPlay
           playsInline
           muted
-          className="w-[640px] h-[480px] object-cover rounded-lg border-2 border-gray-300 bg-black"
+          className="w-[480px] h-[360px] object-cover rounded-lg border-2 border-gray-300 bg-black"
         />
         
-        {/* Overlay Information */}
+        {/* Connection Status Overlay */}
         <div className="absolute top-4 left-4 right-4">
           <div className="bg-black bg-opacity-70 text-white p-3 rounded-lg">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Registration Status</span>
               <div className="flex items-center space-x-2">
-                {isConnected && (
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                )}
-                <span className="text-xs">
-                  {isConnected ? 'Connected' : 'Disconnected'}
-                </span>
+                {getConnectionIcon()}
+                <span className="text-xs">{getConnectionText()}</span>
               </div>
             </div>
             
             <p className="text-sm">{status}</p>
             
+            {/* Progress Bar */}
             {requiredFrames > 0 && (
               <div className="mt-2">
                 <div className="flex justify-between text-xs mb-1">
-                  <span>Progress</span>
-                  <span>{framesCollected}/{requiredFrames}</span>
+                  <span>Progress ({framesCollected}/{requiredFrames})</span>
+                  <span>Sent: {framesSent}</span>
                 </div>
                 <div className="w-full bg-gray-600 rounded-full h-2">
                   <div 
@@ -277,6 +438,14 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
                     style={{ width: `${(framesCollected / requiredFrames) * 100}%` }}
                   ></div>
                 </div>
+              </div>
+            )}
+
+            {/* Performance Metrics */}
+            {(processingTime !== null || networkLatency !== null) && (
+              <div className="mt-2 text-xs text-gray-300">
+                {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
+                {networkLatency !== null && <span>Latency: {networkLatency}ms</span>}
               </div>
             )}
           </div>
@@ -290,7 +459,7 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
                 {qualityScore !== null && (
                   <div>
                     <span className="block text-gray-300">Quality</span>
-                    <span className={`font-bold ${qualityScore >= 70 ? 'text-green-400' : qualityScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${qualityScore >= 50 ? 'text-green-400' : qualityScore >= 25 ? 'text-yellow-400' : 'text-red-400'}`}>
                       {qualityScore.toFixed(1)}%
                     </span>
                   </div>
@@ -298,7 +467,7 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
                 {antispoofingScore !== null && (
                   <div>
                     <span className="block text-gray-300">Liveness</span>
-                    <span className={`font-bold ${antispoofingScore >= 0.7 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${antispoofingScore >= 0.5 ? 'text-green-400' : 'text-red-400'}`}>
                       {(antispoofingScore * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -322,11 +491,18 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       <div className="flex space-x-4">
         {!isStreaming && !success && (
           <button
-            onClick={startVideoStream}
-            className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            onClick={handleStart}
+            disabled={connectionState === 'connecting'}
+            className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
           >
-            <PlayCircle size={20} />
-            <span>Start Registration</span>
+            {connectionState === 'connecting' ? (
+              <Loader size={20} className="animate-spin" />
+            ) : (
+              <PlayCircle size={20} />
+            )}
+            <span>
+              {connectionState === 'connecting' ? 'Connecting...' : 'Start Registration'}
+            </span>
           </button>
         )}
 
@@ -347,6 +523,16 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
           >
             <Camera size={20} />
             <span>Register Again</span>
+          </button>
+        )}
+
+        {connectionState === 'disconnected' && retryCount >= MAX_RETRIES && !success && (
+          <button
+            onClick={handleRestart}
+            className="flex items-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+          >
+            <PlayCircle size={20} />
+            <span>Retry Connection</span>
           </button>
         )}
       </div>
@@ -377,23 +563,26 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
             <p><strong>Anti-spoofing Score:</strong> {(sessionData.antispoofing_score * 100)?.toFixed(1)}%</p>
             <p><strong>Frames Processed:</strong> {sessionData.frames_processed}</p>
             <p><strong>Face ID:</strong> {sessionData.face_id}</p>
+            {sessionData.avg_processing_time && (
+              <p><strong>Avg Processing Time:</strong> {sessionData.avg_processing_time.toFixed(0)}ms</p>
+            )}
           </div>
         </div>
       )}
 
-      {/* Instructions */}
+      {/* Optimized Instructions */}
       <div className="w-full max-w-md bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center space-x-2 mb-3">
           <Shield size={20} className="text-blue-600" />
-          <p className="font-medium text-blue-800">Registration Instructions</p>
+          <p className="font-medium text-blue-800">Optimized Registration (Fast Mode)</p>
         </div>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Look directly at the camera</li>
-          <li>• Ensure good lighting on your face</li>
-          <li>• Keep your face centered in the frame</li>
-          <li>• Remove glasses or masks if possible</li>
-          <li>• Stay still during the process</li>
-          <li>• The system will collect {requiredFrames} high-quality frames</li>
+          <li>• Only {requiredFrames} frames needed (faster)</li>
+          <li>• More lenient quality requirements</li>
+          <li>• Auto-reconnection on network issues</li>
+          <li>• Look directly at camera and stay still</li>
+          <li>• System processes 1 frame per second</li>
+          <li>• Improved error handling and retries</li>
         </ul>
       </div>
 
@@ -403,4 +592,4 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   )
 }
 
-export default RealTimeFaceRegistration
+export default OptimizedRealTimeFaceRegistration

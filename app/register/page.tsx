@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { faceAPI, FaceStatusResponse } from '@/lib/api'
-import RealTimeFaceRegistration from '@/components/RealTimeFaceRegistration'
+import OptimizedRealTimeFaceRegistration from '@/components/RealTimeFaceRegistration'
 import { UserCheck, AlertCircle, CheckCircle, Info, Users, Shield } from 'lucide-react'
 
 const RegisterPage = () => {
@@ -222,7 +222,7 @@ const RegisterPage = () => {
         </div>
         
         {showRegistration ? (
-          <RealTimeFaceRegistration
+          <OptimizedRealTimeFaceRegistration
             userId={userId}
             onSuccess={handleRegistrationSuccess}
             onError={handleRegistrationError}

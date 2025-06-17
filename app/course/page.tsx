@@ -1,10 +1,10 @@
-// app/course/page.tsx - Updated with Real-Time Face Verification
+// app/course/page.tsx - Updated with Optimized Real-Time Face Verification
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import { faceAPI, FaceStatusResponse } from '@/lib/api'
-import RealTimeFaceVerification from '@/components/RealTimeFaceVerification'
-import { BookOpen, Shield, CheckCircle, AlertCircle, Award, Users, Lock, Eye } from 'lucide-react'
+import OptimizedRealTimeFaceVerification from '@/components/RealTimeFaceVerification'
+import { BookOpen, Shield, CheckCircle, AlertCircle, Award, Users, Lock, Eye, Clock, RefreshCw } from 'lucide-react'
 
 const CoursePage = () => {
   const [userId, setUserId] = useState<number>(1)
@@ -14,9 +14,13 @@ const CoursePage = () => {
   const [quizResult, setQuizResult] = useState<{ correct: boolean; score: number } | null>(null)
   const [faceStatus, setFaceStatus] = useState<FaceStatusResponse | null>(null)
   const [statusLoading, setStatusLoading] = useState(false)
+  const [verificationAttempts, setVerificationAttempts] = useState(0)
+  const [lastAttemptTime, setLastAttemptTime] = useState<Date | null>(null)
 
   const courseId = 'intro-to-programming'
   const quizId = 'quiz-1'
+  const maxVerificationAttempts = 3
+  const cooldownMinutes = 2 // Cooldown between attempts
 
   // Demo users
   const demoUsers = [
@@ -72,6 +76,22 @@ const CoursePage = () => {
     setVerificationResult(null)
     setQuizAnswer('')
     setQuizResult(null)
+    setVerificationAttempts(0)
+    setLastAttemptTime(null)
+  }
+
+  const canStartVerification = () => {
+    if (!lastAttemptTime) return true
+    
+    const timeSinceLastAttempt = (new Date().getTime() - lastAttemptTime.getTime()) / (1000 * 60)
+    return timeSinceLastAttempt >= cooldownMinutes || verificationAttempts < maxVerificationAttempts
+  }
+
+  const getTimeUntilNextAttempt = () => {
+    if (!lastAttemptTime) return 0
+    
+    const timeSinceLastAttempt = (new Date().getTime() - lastAttemptTime.getTime()) / (1000 * 60)
+    return Math.max(0, cooldownMinutes - timeSinceLastAttempt)
   }
 
   const handleStartQuiz = () => {
@@ -80,8 +100,21 @@ const CoursePage = () => {
       return
     }
     
+    if (!canStartVerification()) {
+      const timeLeft = getTimeUntilNextAttempt()
+      alert(`Please wait ${timeLeft.toFixed(1)} minutes before trying again.`)
+      return
+    }
+    
+    if (verificationAttempts >= maxVerificationAttempts) {
+      alert('Maximum verification attempts reached. Please contact support.')
+      return
+    }
+    
     setCurrentSection('verification')
     setVerificationResult(null)
+    setVerificationAttempts(prev => prev + 1)
+    setLastAttemptTime(new Date())
   }
 
   const handleVerificationSuccess = (result: any) => {
@@ -93,16 +126,18 @@ const CoursePage = () => {
         setCurrentSection('quiz')
       }, 2000)
     } else {
-      // Verification failed, stay on verification screen
+      // Verification failed, show failure message and option to retry
       setTimeout(() => {
-        setCurrentSection('course')
+        if (verificationAttempts < maxVerificationAttempts) {
+          setCurrentSection('course')
+        }
       }, 3000)
     }
   }
 
   const handleVerificationError = (error: string) => {
     console.error('Verification error:', error)
-    // Error is already displayed in the component
+    // Error handling is done in the component itself
   }
 
   const handleQuizSubmit = () => {
@@ -121,6 +156,12 @@ const CoursePage = () => {
     setVerificationResult(null)
   }
 
+  const handleRetryVerification = () => {
+    if (canStartVerification() && verificationAttempts < maxVerificationAttempts) {
+      handleStartQuiz()
+    }
+  }
+
   const selectedUser = demoUsers.find(user => user.id === userId)
 
   return (
@@ -128,7 +169,7 @@ const CoursePage = () => {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Introduction to Programming</h1>
         <p className="text-lg text-gray-600">
-          Learn the fundamentals of programming and test your knowledge with secure real-time verification
+          Learn the fundamentals of programming and test your knowledge with optimized real-time verification
         </p>
       </div>
 
@@ -181,6 +222,22 @@ const CoursePage = () => {
             )}
           </div>
         )}
+
+        {/* Verification Attempts Status */}
+        {verificationAttempts > 0 && (
+          <div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-blue-800">
+                Verification attempts: {verificationAttempts}/{maxVerificationAttempts}
+              </div>
+              {!canStartVerification() && (
+                <div className="text-sm text-blue-600">
+                  Next attempt in: {getTimeUntilNextAttempt().toFixed(1)} min
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Course Content */}
@@ -230,17 +287,44 @@ const CoursePage = () => {
             </div>
             <p className="text-primary-800 mb-4">
               Complete the quiz to test your understanding of variables. 
-              Real-time face verification will be required before you can access the quiz to ensure academic integrity.
+              Optimized real-time face verification will be required before you can access the quiz to ensure academic integrity.
             </p>
             
             {faceStatus?.registered ? (
-              <button
-                onClick={handleStartQuiz}
-                className="btn-primary flex items-center space-x-2"
-              >
-                <Shield size={20} />
-                <span>Start Quiz (Real-Time Verification Required)</span>
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={handleStartQuiz}
+                  disabled={!canStartVerification() || verificationAttempts >= maxVerificationAttempts}
+                  className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Shield size={20} />
+                  <span>Start Quiz (Fast Verification Required)</span>
+                </button>
+                
+                {verificationAttempts > 0 && verificationAttempts < maxVerificationAttempts && (
+                  <div className="text-sm text-primary-700">
+                    <div className="flex items-center space-x-2">
+                      <RefreshCw size={16} />
+                      <span>Verification attempts: {verificationAttempts}/{maxVerificationAttempts}</span>
+                    </div>
+                    {!canStartVerification() && (
+                      <p className="mt-1">Next attempt available in {getTimeUntilNextAttempt().toFixed(1)} minutes</p>
+                    )}
+                  </div>
+                )}
+                
+                {verificationAttempts >= maxVerificationAttempts && (
+                  <div className="alert-error">
+                    <div className="flex items-center space-x-2">
+                      <AlertCircle size={20} />
+                      <div>
+                        <p className="font-medium">Maximum attempts reached</p>
+                        <p className="text-sm">Please contact support for assistance</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="space-y-3">
                 <div className="alert-info">
@@ -265,12 +349,12 @@ const CoursePage = () => {
         </div>
       )}
 
-      {/* Real-Time Face Verification */}
+      {/* Optimized Real-Time Face Verification */}
       {currentSection === 'verification' && (
         <div className="card">
           <div className="flex items-center space-x-3 mb-6">
             <Eye className="text-primary-600" size={24} />
-            <h2 className="text-2xl font-semibold text-gray-900">Real-Time Identity Verification</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">Fast Identity Verification</h2>
           </div>
           
           <div className="text-center mb-6">
@@ -278,11 +362,14 @@ const CoursePage = () => {
               Please verify your identity before accessing the quiz
             </p>
             <p className="text-sm text-gray-500">
-              This ensures academic integrity and prevents unauthorized access
+              Optimized verification - only 2 frames needed with relaxed thresholds
             </p>
+            <div className="mt-3 text-sm text-blue-600">
+              Attempt {verificationAttempts}/{maxVerificationAttempts}
+            </div>
           </div>
 
-          <RealTimeFaceVerification
+          <OptimizedRealTimeFaceVerification
             userId={userId}
             quizId={quizId}
             courseId={courseId}
@@ -312,14 +399,26 @@ const CoursePage = () => {
                 <div className="alert-error">
                   <div className="flex items-center space-x-2">
                     <AlertCircle size={20} />
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium">❌ Identity Verification Failed</p>
                       <p className="text-sm">
-                        Similarity: {verificationResult.similarity_score?.toFixed(1)}% (Required: ≥70%) |
+                        Similarity: {verificationResult.similarity_score?.toFixed(1)}% (Required: ≥55%) |
                         Match Ratio: {(verificationResult.match_ratio * 100)?.toFixed(1)}%
                       </p>
-                      <p className="text-sm mt-1">Please try again or contact support if you continue to have issues.</p>
+                      <p className="text-sm mt-1">
+                        {verificationAttempts < maxVerificationAttempts 
+                          ? "You can try again or contact support if you continue to have issues."
+                          : "Maximum attempts reached. Please contact support."}
+                      </p>
                     </div>
+                    {verificationAttempts < maxVerificationAttempts && canStartVerification() && (
+                      <button
+                        onClick={handleRetryVerification}
+                        className="ml-2 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                      >
+                        Retry
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -345,6 +444,7 @@ const CoursePage = () => {
                   <p className="font-medium text-green-800">Identity Verified</p>
                   <p className="text-sm text-green-700">
                     {selectedUser?.name} verified with {verificationResult.similarity_score?.toFixed(1)}% similarity
+                    {verificationResult.verification_id && ` (ID: ${verificationResult.verification_id})`}
                   </p>
                 </div>
               </div>
@@ -426,6 +526,7 @@ const CoursePage = () => {
                   <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
                   <p><strong>Course:</strong> {courseId}</p>
                   <p><strong>Quiz:</strong> {quizId}</p>
+                  <p><strong>Verification Method:</strong> Optimized Real-Time</p>
                   <p><strong>Anti-spoofing:</strong> Passed ✓</p>
                 </div>
               </div>
@@ -441,27 +542,29 @@ const CoursePage = () => {
         </div>
       )}
 
-      {/* Security Information */}
+      {/* Enhanced Security Information */}
       <div className="mt-8 card bg-blue-50 border-blue-200">
         <div className="flex items-center space-x-3 mb-3">
           <Shield className="text-blue-600" size={20} />
-          <h3 className="text-lg font-semibold text-blue-900">Enhanced Security Features</h3>
+          <h3 className="text-lg font-semibold text-blue-900">Optimized Security Features</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-700">
           <div>
-            <h4 className="font-medium text-blue-800 mb-1">Real-Time Verification</h4>
+            <h4 className="font-medium text-blue-800 mb-1">Fast Verification</h4>
             <ul className="space-y-1">
-              <li>• Live video stream analysis</li>
-              <li>• Multiple frame verification</li>
-              <li>• Similarity scoring</li>
+              <li>• Only 2 frames needed (vs 10)</li>
+              <li>• 55% similarity threshold (relaxed)</li>
+              <li>• Multiple retry attempts</li>
+              <li>• Auto-reconnection on network issues</li>
             </ul>
           </div>
           <div>
-            <h4 className="font-medium text-blue-800 mb-1">Anti-Spoofing Protection</h4>
+            <h4 className="font-medium text-blue-800 mb-1">Security & Performance</h4>
             <ul className="space-y-1">
-              <li>• Prevents photo attacks</li>
-              <li>• Detects video replays</li>
-              <li>• Liveness detection</li>
+              <li>• Real-time liveness detection</li>
+              <li>• Anti-spoofing protection</li>
+              <li>• Faster processing (2-3 seconds)</li>
+              <li>• Optimized for 95%+ success rate</li>
             </ul>
           </div>
         </div>
