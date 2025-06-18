@@ -1,10 +1,10 @@
-// components/OptimizedRealTimeFaceVerification.tsx
+// components/RealTimeFaceVerification.tsx - Perfectly aligned with backend
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Shield, CheckCircle, AlertCircle, StopCircle, PlayCircle, Eye, UserCheck, Wifi, WifiOff, Loader, RotateCcw } from 'lucide-react'
 
-interface OptimizedRealTimeFaceVerificationProps {
+interface RealTimeFaceVerificationProps {
   userId: number
   quizId?: string
   courseId?: string
@@ -13,7 +13,7 @@ interface OptimizedRealTimeFaceVerificationProps {
   className?: string
 }
 
-const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificationProps> = ({ 
+const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({ 
   userId, 
   quizId, 
   courseId, 
@@ -49,15 +49,22 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
   const [attemptsRemaining, setAttemptsRemaining] = useState(5)
   const [networkLatency, setNetworkLatency] = useState<number | null>(null)
   const [canRetry, setCanRetry] = useState(true)
+  const [frameCount, setFrameCount] = useState(0)
+  const [processedCount, setProcessedCount] = useState(0)
+  const [maxSimilarity, setMaxSimilarity] = useState<number | null>(null)
+  const [matchRatio, setMatchRatio] = useState<number | null>(null)
+  const [confidenceScore, setConfidenceScore] = useState<number | null>(null)
 
-  // Optimized settings for verification
+  // Backend-aligned settings from main.py verification endpoint
   const MAX_RETRIES = 3
-  const RECONNECT_DELAY = 2000  // Faster reconnection for verification
-  const FRAME_CAPTURE_INTERVAL = 800  // Faster for verification - 800ms
+  const RECONNECT_DELAY = 2000  // Faster for verification
+  const FRAME_CAPTURE_INTERVAL = 800  // Faster for verification - every 8th frame processed
   const FRAME_QUALITY = 0.7  // Better quality for verification
   const MAX_FRAME_SIZE = { width: 480, height: 360 }
   const HEARTBEAT_INTERVAL = 15000  // 15 seconds
   const CONNECTION_TIMEOUT = 10000  // 10 seconds - faster for verification
+  const SIMILARITY_THRESHOLD = 55.0  // Relaxed threshold from backend
+  const MAX_VERIFICATION_ATTEMPTS = 5  // Matches backend
 
   const buildWebSocketUrl = useCallback(() => {
     const baseUrl = `ws://localhost:8000/ws/face-verification/${userId}`
@@ -158,6 +165,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
           const message = JSON.parse(event.data)
           console.log('📨 Received verification message:', message.type)
 
+          // Handle all message types exactly as implemented in backend
           switch (message.type) {
             case 'connected':
               setRequiredFrames(message.required_frames || 2)
@@ -177,11 +185,17 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
                 setComparisonTime(message.comparison_time)
                 setStatus(message.message)
                 setError(null)
+                
+                // Track maximum similarity for better UX
+                if (message.similarity_score && (maxSimilarity === null || message.similarity_score > maxSimilarity)) {
+                  setMaxSimilarity(message.similarity_score)
+                }
               } else {
                 setStatus(message.message)
                 setProcessingTime(message.processing_time)
                 setAttemptsRemaining(message.attempts_remaining || 0)
               }
+              setProcessedCount(prev => prev + 1)
               break
 
             case 'spoofing_detected':
@@ -195,6 +209,15 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
               setSuccess(true)
               setVerificationResult(message)
               setStatus(message.verified ? '✅ Identity verified successfully!' : '❌ Identity verification failed')
+              
+              // Store all verification metrics from backend
+              setSimilarityScore(message.similarity_score)
+              setMaxSimilarity(message.max_similarity_score)
+              setQualityScore(message.quality_score)
+              setAntispoofingScore(message.antispoofing_score)
+              setMatchRatio(message.match_ratio)
+              setConfidenceScore(message.confidence_score)
+              
               stopStreaming()
               if (onSuccess) {
                 onSuccess(message)
@@ -202,12 +225,18 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
               break
 
             case 'verification_restarted':
+              // Reset verification state when backend restarts
               setFramesCollected(0)
               setFramesSent(0)
+              setFrameCount(0)
+              setProcessedCount(0)
               setQualityScore(null)
               setSimilarityScore(null)
               setAntispoofingScore(null)
               setIsMatch(null)
+              setMaxSimilarity(null)
+              setMatchRatio(null)
+              setConfidenceScore(null)
               setError(null)
               setStatus(message.message)
               break
@@ -257,6 +286,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
         
         console.log('❌ Verification WebSocket closed:', event.code, event.reason)
         
+        // Handle specific close codes from backend
         if (event.code === 4004) {
           setError('User not found')
           setStatus('❌ User not found')
@@ -287,7 +317,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
       setError('Failed to create connection')
       setConnectionState('disconnected')
     }
-  }, [buildWebSocketUrl, success, retryCount, onSuccess, onError, startHeartbeat, stopHeartbeat])
+  }, [buildWebSocketUrl, success, retryCount, onSuccess, onError, startHeartbeat, stopHeartbeat, maxSimilarity])
 
   const startFrameCapture = useCallback(() => {
     if (!intervalRef.current) {
@@ -317,6 +347,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const frameData = canvas.toDataURL('image/jpeg', FRAME_QUALITY)
 
+      // Send frame with exact format expected by backend
       wsRef.current.send(JSON.stringify({
         type: 'frame',
         frame: frameData,
@@ -324,6 +355,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
       }))
 
       setFramesSent(prev => prev + 1)
+      setFrameCount(prev => prev + 1)
     } catch (error) {
       console.error('Error capturing/sending verification frame:', error)
     }
@@ -385,6 +417,8 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
     setError(null)
     setFramesCollected(0)
     setFramesSent(0)
+    setFrameCount(0)
+    setProcessedCount(0)
     setQualityScore(null)
     setSimilarityScore(null)
     setAntispoofingScore(null)
@@ -396,6 +430,9 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
     setRetryCount(0)
     setNetworkLatency(null)
     setCanRetry(true)
+    setMaxSimilarity(null)
+    setMatchRatio(null)
+    setConfidenceScore(null)
     
     if (!isConnected) {
       handleStart()
@@ -465,7 +502,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
             
             <p className="text-sm">{status}</p>
             
-            {/* Progress Bar */}
+            {/* Progress Bar - matches backend frame requirements */}
             {requiredFrames > 0 && (
               <div className="mt-2">
                 <div className="flex justify-between text-xs mb-1">
@@ -475,7 +512,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
                 <div className="w-full bg-gray-600 rounded-full h-2">
                   <div 
                     className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${(framesCollected / requiredFrames) * 100}%` }}
+                    style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
                   ></div>
                 </div>
               </div>
@@ -492,7 +529,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
           </div>
         </div>
 
-        {/* Real-time Verification Indicators */}
+        {/* Real-time Verification Indicators - matches backend thresholds */}
         {(qualityScore !== null || similarityScore !== null || antispoofingScore !== null) && (
           <div className="absolute bottom-4 left-4 right-4">
             <div className="bg-black bg-opacity-70 text-white p-2 rounded-lg">
@@ -500,7 +537,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
                 {qualityScore !== null && (
                   <div>
                     <span className="block text-gray-300">Quality</span>
-                    <span className={`font-bold ${qualityScore >= 30 ? 'text-green-400' : qualityScore >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${qualityScore >= 10 ? 'text-green-400' : qualityScore >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
                       {qualityScore.toFixed(1)}%
                     </span>
                   </div>
@@ -509,7 +546,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
                   <div>
                     <span className="block text-gray-300">Similarity</span>
                     <div className="flex items-center space-x-1">
-                      <span className={`font-bold ${similarityScore >= 55 ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`font-bold ${similarityScore >= SIMILARITY_THRESHOLD ? 'text-green-400' : 'text-red-400'}`}>
                         {similarityScore.toFixed(1)}%
                       </span>
                       {getMatchIndicator()}
@@ -519,7 +556,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
                 {antispoofingScore !== null && (
                   <div>
                     <span className="block text-gray-300">Liveness</span>
-                    <span className={`font-bold ${antispoofingScore >= 0.3 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${antispoofingScore >= 0.2 ? 'text-green-400' : 'text-red-400'}`}>
                       {(antispoofingScore * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -599,7 +636,8 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
           <div className="text-sm text-gray-600 space-y-1">
             {courseId && <p><strong>Course:</strong> {courseId}</p>}
             {quizId && <p><strong>Quiz:</strong> {quizId}</p>}
-            <p><strong>Threshold:</strong> 55% similarity (relaxed)</p>
+            <p><strong>Threshold:</strong> {SIMILARITY_THRESHOLD}% similarity (relaxed)</p>
+            <p><strong>Required Frames:</strong> {requiredFrames} (optimized)</p>
           </div>
         </div>
       )}
@@ -625,7 +663,7 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
         </div>
       )}
 
-      {/* Verification Results */}
+      {/* Verification Results - matches backend response structure exactly */}
       {success && verificationResult && (
         <div className={`w-full max-w-md ${verificationResult.verified ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-4`}>
           <div className="flex items-center space-x-2 mb-3">
@@ -646,8 +684,15 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
             )}
             <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
             <p><strong>Anti-spoofing:</strong> {(verificationResult.antispoofing_score * 100)?.toFixed(1)}%</p>
-            <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+            {verificationResult.match_ratio !== undefined && (
+              <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+            )}
+            {verificationResult.confidence_score !== undefined && (
+              <p><strong>Confidence:</strong> {verificationResult.confidence_score?.toFixed(1)}%</p>
+            )}
             <p><strong>Frames Processed:</strong> {verificationResult.frames_processed}</p>
+            <p><strong>Threshold Used:</strong> {verificationResult.threshold_used || SIMILARITY_THRESHOLD}%</p>
+            <p><strong>Method:</strong> {verificationResult.verification_method || 'optimized_stream'}</p>
             {verificationResult.verification_id && (
               <p><strong>Verification ID:</strong> {verificationResult.verification_id}</p>
             )}
@@ -662,12 +707,13 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
           <p className="font-medium text-blue-800">Fast Verification (Optimized)</p>
         </div>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Only 2 frames needed for verification</li>
-          <li>• Relaxed 55% similarity threshold</li>
+          <li>• Only {requiredFrames} frames needed for verification</li>
+          <li>• Relaxed {SIMILARITY_THRESHOLD}% similarity threshold</li>
           <li>• Multiple retry attempts allowed</li>
           <li>• Auto-reconnection on network issues</li>
           <li>• Look directly at camera and stay still</li>
           <li>• Faster processing for quiz access</li>
+          <li>• Multi-criteria matching for better success rate</li>
         </ul>
       </div>
 
@@ -677,4 +723,4 @@ const OptimizedRealTimeFaceVerification: React.FC<OptimizedRealTimeFaceVerificat
   )
 }
 
-export default OptimizedRealTimeFaceVerification
+export default RealTimeFaceVerification

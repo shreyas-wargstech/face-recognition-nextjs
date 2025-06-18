@@ -1,17 +1,17 @@
-// components/OptimizedRealTimeFaceRegistration.tsx
+// components/RealTimeFaceRegistration.tsx - Perfectly aligned with backend
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Camera, CheckCircle, AlertCircle, Shield, StopCircle, PlayCircle, Loader, Wifi, WifiOff } from 'lucide-react'
+import { Camera, CheckCircle, AlertCircle, Shield, StopCircle, PlayCircle, Loader, Wifi, WifiOff, RotateCcw } from 'lucide-react'
 
-interface OptimizedRealTimeFaceRegistrationProps {
+interface RealTimeFaceRegistrationProps {
   userId: number
   onSuccess?: (result: any) => void
   onError?: (error: string) => void
   className?: string
 }
 
-const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrationProps> = ({ 
+const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({ 
   userId, 
   onSuccess, 
   onError, 
@@ -34,25 +34,28 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
   const [requiredFrames, setRequiredFrames] = useState(3)
   const [qualityScore, setQualityScore] = useState<number | null>(null)
   const [antispoofingScore, setAntispoofingScore] = useState<number | null>(null)
+  const [faceConfidence, setFaceConfidence] = useState<number | null>(null)
   const [processingTime, setProcessingTime] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [sessionData, setSessionData] = useState<any>(null)
   const [retryCount, setRetryCount] = useState(0)
   const [networkLatency, setNetworkLatency] = useState<number | null>(null)
+  const [frameCount, setFrameCount] = useState(0)
+  const [processedCount, setProcessedCount] = useState(0)
 
-  // Optimized settings
+  // Backend-aligned settings from main.py
   const MAX_RETRIES = 3
   const RECONNECT_DELAY = 3000
-  const FRAME_CAPTURE_INTERVAL = 1000 // Slower: 1 second between frames
-  const FRAME_QUALITY = 0.6 // Lower quality for faster processing
-  const MAX_FRAME_SIZE = { width: 480, height: 360 } // Smaller frames
-  const HEARTBEAT_INTERVAL = 20000 // 20 seconds
-  const CONNECTION_TIMEOUT = 15000 // 15 seconds
+  const FRAME_CAPTURE_INTERVAL = 1000  // 1 second - matches backend frame_skip
+  const FRAME_QUALITY = 0.6  // Matches backend quality setting
+  const MAX_FRAME_SIZE = { width: 480, height: 360 }  // Matches backend
+  const HEARTBEAT_INTERVAL = 20000  // 20 seconds - matches backend
+  const CONNECTION_TIMEOUT = 15000  // 15 seconds - matches backend
 
   const buildWebSocketUrl = useCallback(() => {
-    const baseUrl = `ws://localhost:8000/ws/face-registration/${userId}`
-    return baseUrl
+    // Exact URL format from backend
+    return `ws://localhost:8000/ws/face-registration/${userId}`
   }, [userId])
 
   const startHeartbeat = useCallback(() => {
@@ -80,11 +83,12 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
 
   const startVideoStream = useCallback(async () => {
     try {
+      // Exact constraints that match backend expectations
       const constraints = {
         video: {
           width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
           height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
-          frameRate: { ideal: 15, max: 20 }, // Lower frame rate
+          frameRate: { ideal: 15, max: 20 },
           facingMode: 'user'
         },
         audio: false
@@ -121,7 +125,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
-      // Connection timeout
+      // Connection timeout - matches backend
       const connectionTimeout = setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
           ws.close()
@@ -145,10 +149,11 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
           const message = JSON.parse(event.data)
           console.log('📨 Received message:', message.type)
 
+          // Handle all message types from backend exactly as implemented
           switch (message.type) {
             case 'connected':
-              setRequiredFrames(message.required_frames)
-              setStatus(`Registration ready. Please look at the camera. Need ${message.required_frames} good frames.`)
+              setRequiredFrames(message.required_frames || 3)
+              setStatus(`Registration ready. Please look at the camera. Need ${message.required_frames || 3} good frames.`)
               setIsStreaming(true)
               startFrameCapture()
               break
@@ -158,12 +163,14 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
                 setFramesCollected(message.frames_collected)
                 setQualityScore(message.quality_score)
                 setAntispoofingScore(message.antispoofing_score)
+                setFaceConfidence(message.face_confidence)
                 setProcessingTime(message.processing_time)
                 setStatus(message.message)
                 setError(null)
               } else {
                 setStatus(message.message)
                 setProcessingTime(message.processing_time)
+                // Don't treat failed frame processing as error - just feedback
               }
               break
 
@@ -199,7 +206,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
               break
 
             case 'heartbeat':
-              // Server heartbeat received
+              // Server heartbeat received - keep connection alive
               break
 
             case 'timeout_warning':
@@ -230,12 +237,13 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
         
         console.log('❌ WebSocket closed:', event.code, event.reason)
         
+        // Handle specific close codes from backend
         if (event.code === 4004) {
           setError('User not found')
           setStatus('❌ User not found')
           setConnectionState('disconnected')
         } else if (!success && retryCount < MAX_RETRIES) {
-          // Auto-reconnect logic
+          // Auto-reconnect logic matching backend expectations
           setConnectionState('reconnecting')
           setStatus(`Connection lost. Reconnecting... (${retryCount + 1}/${MAX_RETRIES})`)
           
@@ -262,7 +270,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
     if (!intervalRef.current) {
       intervalRef.current = setInterval(() => {
         captureAndSendFrame()
-      }, FRAME_CAPTURE_INTERVAL) // Slower capture rate
+      }, FRAME_CAPTURE_INTERVAL)
     }
   }, [])
 
@@ -280,17 +288,17 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
     }
 
     try {
-      // Set smaller canvas dimensions for faster processing
+      // Set canvas dimensions to match backend expectations
       canvas.width = MAX_FRAME_SIZE.width
       canvas.height = MAX_FRAME_SIZE.height
 
       // Draw and resize frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-      // Convert to base64 with lower quality
+      // Convert to base64 with quality matching backend
       const frameData = canvas.toDataURL('image/jpeg', FRAME_QUALITY)
 
-      // Send frame to WebSocket
+      // Send frame with exact format expected by backend
       wsRef.current.send(JSON.stringify({
         type: 'frame',
         frame: frameData,
@@ -298,6 +306,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
       }))
 
       setFramesSent(prev => prev + 1)
+      setFrameCount(prev => prev + 1)
     } catch (error) {
       console.error('Error capturing/sending frame:', error)
     }
@@ -319,7 +328,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
       reconnectTimeoutRef.current = null
     }
 
-    // Close WebSocket
+    // Close WebSocket with proper format expected by backend
     if (wsRef.current) {
       try {
         wsRef.current.send(JSON.stringify({ type: 'stop' }))
@@ -354,12 +363,16 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
   }, [stopStreaming])
 
   const handleRestart = useCallback(() => {
+    // Reset all state to initial values
     setSuccess(false)
     setError(null)
     setFramesCollected(0)
     setFramesSent(0)
+    setFrameCount(0)
+    setProcessedCount(0)
     setQualityScore(null)
     setAntispoofingScore(null)
+    setFaceConfidence(null)
     setProcessingTime(null)
     setSessionData(null)
     setRetryCount(0)
@@ -412,7 +425,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
           className="w-[480px] h-[360px] object-cover rounded-lg border-2 border-gray-300 bg-black"
         />
         
-        {/* Connection Status Overlay */}
+        {/* Status Overlay - matches backend messaging */}
         <div className="absolute top-4 left-4 right-4">
           <div className="bg-black bg-opacity-70 text-white p-3 rounded-lg">
             <div className="flex items-center justify-between mb-2">
@@ -425,23 +438,23 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
             
             <p className="text-sm">{status}</p>
             
-            {/* Progress Bar */}
+            {/* Progress Bar - aligned with backend frame requirements */}
             {requiredFrames > 0 && (
               <div className="mt-2">
                 <div className="flex justify-between text-xs mb-1">
                   <span>Progress ({framesCollected}/{requiredFrames})</span>
-                  <span>Sent: {framesSent}</span>
+                  <span>Sent: {framesSent} | Total: {frameCount}</span>
                 </div>
                 <div className="w-full bg-gray-600 rounded-full h-2">
                   <div 
                     className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${(framesCollected / requiredFrames) * 100}%` }}
+                    style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
                   ></div>
                 </div>
               </div>
             )}
 
-            {/* Performance Metrics */}
+            {/* Performance Metrics - matches backend data */}
             {(processingTime !== null || networkLatency !== null) && (
               <div className="mt-2 text-xs text-gray-300">
                 {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
@@ -451,15 +464,15 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
           </div>
         </div>
 
-        {/* Quality Indicators */}
-        {(qualityScore !== null || antispoofingScore !== null) && (
+        {/* Quality Indicators - matches backend thresholds */}
+        {(qualityScore !== null || antispoofingScore !== null || faceConfidence !== null) && (
           <div className="absolute bottom-4 left-4 right-4">
             <div className="bg-black bg-opacity-70 text-white p-2 rounded-lg">
-              <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-3 gap-2 text-xs">
                 {qualityScore !== null && (
                   <div>
                     <span className="block text-gray-300">Quality</span>
-                    <span className={`font-bold ${qualityScore >= 50 ? 'text-green-400' : qualityScore >= 25 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${qualityScore >= 25 ? 'text-green-400' : qualityScore >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
                       {qualityScore.toFixed(1)}%
                     </span>
                   </div>
@@ -467,8 +480,16 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
                 {antispoofingScore !== null && (
                   <div>
                     <span className="block text-gray-300">Liveness</span>
-                    <span className={`font-bold ${antispoofingScore >= 0.5 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${antispoofingScore >= 0.4 ? 'text-green-400' : 'text-red-400'}`}>
                       {(antispoofingScore * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+                {faceConfidence !== null && (
+                  <div>
+                    <span className="block text-gray-300">Detection</span>
+                    <span className={`font-bold ${faceConfidence >= 0.5 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(faceConfidence * 100).toFixed(1)}%
                     </span>
                   </div>
                 )}
@@ -507,13 +528,23 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
         )}
 
         {isStreaming && (
-          <button
-            onClick={handleStop}
-            className="flex items-center space-x-2 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-          >
-            <StopCircle size={20} />
-            <span>Stop Registration</span>
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleStop}
+              className="flex items-center space-x-2 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+            >
+              <StopCircle size={20} />
+              <span>Stop</span>
+            </button>
+            
+            <button
+              onClick={handleRestart}
+              className="flex items-center space-x-2 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              <RotateCcw size={20} />
+              <span>Restart</span>
+            </button>
+          </div>
         )}
 
         {success && (
@@ -550,7 +581,7 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
         </div>
       )}
 
-      {/* Success Results */}
+      {/* Success Results - matches backend response structure */}
       {success && sessionData && (
         <div className="w-full max-w-md bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-3">
@@ -559,10 +590,11 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
           </div>
           <div className="text-sm text-green-700 space-y-1">
             <p><strong>User:</strong> {sessionData.user_name}</p>
+            <p><strong>Face ID:</strong> {sessionData.face_id}</p>
             <p><strong>Quality Score:</strong> {sessionData.quality_score?.toFixed(1)}%</p>
             <p><strong>Anti-spoofing Score:</strong> {(sessionData.antispoofing_score * 100)?.toFixed(1)}%</p>
             <p><strong>Frames Processed:</strong> {sessionData.frames_processed}</p>
-            <p><strong>Face ID:</strong> {sessionData.face_id}</p>
+            <p><strong>Model:</strong> {sessionData.model_name || 'ArcFace'}</p>
             {sessionData.avg_processing_time && (
               <p><strong>Avg Processing Time:</strong> {sessionData.avg_processing_time.toFixed(0)}ms</p>
             )}
@@ -570,19 +602,19 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
         </div>
       )}
 
-      {/* Optimized Instructions */}
+      {/* Instructions - aligned with backend settings */}
       <div className="w-full max-w-md bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center space-x-2 mb-3">
           <Shield size={20} className="text-blue-600" />
-          <p className="font-medium text-blue-800">Optimized Registration (Fast Mode)</p>
+          <p className="font-medium text-blue-800">Registration Instructions</p>
         </div>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Only {requiredFrames} frames needed (faster)</li>
-          <li>• More lenient quality requirements</li>
-          <li>• Auto-reconnection on network issues</li>
+          <li>• Need {requiredFrames} high-quality frames</li>
+          <li>• Quality threshold: 25% (relaxed)</li>
+          <li>• Liveness threshold: 40% (moderate)</li>
           <li>• Look directly at camera and stay still</li>
           <li>• System processes 1 frame per second</li>
-          <li>• Improved error handling and retries</li>
+          <li>• Auto-reconnection on network issues</li>
         </ul>
       </div>
 
@@ -592,4 +624,4 @@ const OptimizedRealTimeFaceRegistration: React.FC<OptimizedRealTimeFaceRegistrat
   )
 }
 
-export default OptimizedRealTimeFaceRegistration
+export default RealTimeFaceRegistration

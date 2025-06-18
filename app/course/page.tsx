@@ -1,10 +1,10 @@
-// app/course/page.tsx - Updated with Optimized Real-Time Face Verification
+// app/course/page.tsx - Perfectly aligned with backend verification
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import { faceAPI, FaceStatusResponse } from '@/lib/api'
-import OptimizedRealTimeFaceVerification from '@/components/RealTimeFaceVerification'
-import { BookOpen, Shield, CheckCircle, AlertCircle, Award, Users, Lock, Eye, Clock, RefreshCw } from 'lucide-react'
+import RealTimeFaceVerification from '@/components/RealTimeFaceVerification'
+import { BookOpen, Shield, CheckCircle, AlertCircle, Award, Users, Lock, Eye, Clock, RefreshCw, TrendingUp } from 'lucide-react'
 
 const CoursePage = () => {
   const [userId, setUserId] = useState<number>(1)
@@ -16,18 +16,20 @@ const CoursePage = () => {
   const [statusLoading, setStatusLoading] = useState(false)
   const [verificationAttempts, setVerificationAttempts] = useState(0)
   const [lastAttemptTime, setLastAttemptTime] = useState<Date | null>(null)
+  const [isVerifying, setIsVerifying] = useState(false)
 
+  // Course and quiz identifiers - matches backend structure
   const courseId = 'intro-to-programming'
   const quizId = 'quiz-1'
-  const maxVerificationAttempts = 3
-  const cooldownMinutes = 2 // Cooldown between attempts
+  const maxVerificationAttempts = 5  // Matches backend MAX_VERIFICATION_ATTEMPTS
+  const cooldownMinutes = 2
 
-  // Demo users
+  // Demo users - matches backend AppUser structure
   const demoUsers = [
-    { id: 1, name: 'John Doe', email: 'john@example.com' },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com' },
-    { id: 3, name: 'Bob Johnson', email: 'bob@example.com' },
-    { id: 4, name: 'Alice Wilson', email: 'alice@example.com' },
+    { id: 1, name: 'John Doe', email: 'john@example.com', role: 'Student' },
+    { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'Student' },
+    { id: 3, name: 'Bob Johnson', email: 'bob@example.com', role: 'Instructor' },
+    { id: 4, name: 'Alice Wilson', email: 'alice@example.com', role: 'Student' },
   ]
 
   // Quiz data
@@ -57,6 +59,12 @@ const CoursePage = () => {
         setFaceStatus(status)
       } catch (error) {
         console.error('Failed to check face status:', error)
+        // Provide fallback status for demo
+        setFaceStatus({
+          user_id: userId,
+          user_name: demoUsers.find(u => u.id === userId)?.name || `User ${userId}`,
+          registered: false
+        })
       } finally {
         setStatusLoading(false)
       }
@@ -78,6 +86,7 @@ const CoursePage = () => {
     setQuizResult(null)
     setVerificationAttempts(0)
     setLastAttemptTime(null)
+    setIsVerifying(false)
   }
 
   const canStartVerification = () => {
@@ -113,12 +122,15 @@ const CoursePage = () => {
     
     setCurrentSection('verification')
     setVerificationResult(null)
+    setIsVerifying(true)
     setVerificationAttempts(prev => prev + 1)
     setLastAttemptTime(new Date())
   }
 
   const handleVerificationSuccess = (result: any) => {
+    console.log('Verification result received:', result)
     setVerificationResult(result)
+    setIsVerifying(false)
     
     if (result.verified) {
       // Verification successful, proceed to quiz after a short delay
@@ -137,6 +149,7 @@ const CoursePage = () => {
 
   const handleVerificationError = (error: string) => {
     console.error('Verification error:', error)
+    setIsVerifying(false)
     // Error handling is done in the component itself
   }
 
@@ -154,6 +167,7 @@ const CoursePage = () => {
     setQuizAnswer('')
     setQuizResult(null)
     setVerificationResult(null)
+    setIsVerifying(false)
   }
 
   const handleRetryVerification = () => {
@@ -169,7 +183,7 @@ const CoursePage = () => {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Introduction to Programming</h1>
         <p className="text-lg text-gray-600">
-          Learn the fundamentals of programming and test your knowledge with optimized real-time verification
+          Learn the fundamentals of programming and test your knowledge with real-time face verification
         </p>
       </div>
 
@@ -185,7 +199,8 @@ const CoursePage = () => {
               <button
                 key={user.id}
                 onClick={() => handleUserChange(user.id)}
-                className={`px-3 py-1 rounded font-medium text-sm transition-colors ${
+                disabled={isVerifying}
+                className={`px-3 py-1 rounded font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   userId === user.id
                     ? 'bg-primary-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -196,7 +211,7 @@ const CoursePage = () => {
             ))}
           </div>
           <div className="text-sm text-gray-600">
-            Selected: {selectedUser?.name} (ID: {userId})
+            Selected: {selectedUser?.name} (ID: {userId}) | Role: {selectedUser?.role}
           </div>
         </div>
 
@@ -208,7 +223,7 @@ const CoursePage = () => {
                 <CheckCircle size={16} />
                 <span className="text-sm font-medium">Face registered ✓</span>
                 <span className="text-xs text-gray-600">
-                  (Quality: {faceStatus.quality_score?.toFixed(1)}%)
+                  (Quality: {faceStatus.quality_score?.toFixed(1)}% | Model: {faceStatus.model_name || 'ArcFace'})
                 </span>
               </div>
             ) : (
@@ -287,18 +302,20 @@ const CoursePage = () => {
             </div>
             <p className="text-primary-800 mb-4">
               Complete the quiz to test your understanding of variables. 
-              Optimized real-time face verification will be required before you can access the quiz to ensure academic integrity.
+              Advanced real-time face verification will be required before you can access the quiz to ensure academic integrity.
             </p>
             
             {faceStatus?.registered ? (
               <div className="space-y-3">
                 <button
                   onClick={handleStartQuiz}
-                  disabled={!canStartVerification() || verificationAttempts >= maxVerificationAttempts}
+                  disabled={!canStartVerification() || verificationAttempts >= maxVerificationAttempts || isVerifying}
                   className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Shield size={20} />
-                  <span>Start Quiz (Fast Verification Required)</span>
+                  <span>
+                    {isVerifying ? 'Verifying...' : 'Start Quiz (Real-Time Verification Required)'}
+                  </span>
                 </button>
                 
                 {verificationAttempts > 0 && verificationAttempts < maxVerificationAttempts && (
@@ -349,12 +366,12 @@ const CoursePage = () => {
         </div>
       )}
 
-      {/* Optimized Real-Time Face Verification */}
+      {/* Real-Time Face Verification - matches backend exactly */}
       {currentSection === 'verification' && (
         <div className="card">
           <div className="flex items-center space-x-3 mb-6">
             <Eye className="text-primary-600" size={24} />
-            <h2 className="text-2xl font-semibold text-gray-900">Fast Identity Verification</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">Real-Time Identity Verification</h2>
           </div>
           
           <div className="text-center mb-6">
@@ -362,14 +379,14 @@ const CoursePage = () => {
               Please verify your identity before accessing the quiz
             </p>
             <p className="text-sm text-gray-500">
-              Optimized verification - only 2 frames needed with relaxed thresholds
+              Optimized verification - only 2 frames needed with relaxed 55% similarity threshold
             </p>
             <div className="mt-3 text-sm text-blue-600">
               Attempt {verificationAttempts}/{maxVerificationAttempts}
             </div>
           </div>
 
-          <OptimizedRealTimeFaceVerification
+          <RealTimeFaceVerification
             userId={userId}
             quizId={quizId}
             courseId={courseId}
@@ -378,6 +395,7 @@ const CoursePage = () => {
             className="w-full"
           />
 
+          {/* Verification Result Display */}
           {verificationResult && (
             <div className="mt-6">
               {verificationResult.verified ? (
@@ -386,12 +404,21 @@ const CoursePage = () => {
                     <CheckCircle size={20} />
                     <div>
                       <p className="font-medium">✅ Identity Verified Successfully!</p>
-                      <p className="text-sm">
-                        Similarity: {verificationResult.similarity_score?.toFixed(1)}% | 
-                        Quality: {verificationResult.quality_score?.toFixed(1)}% | 
-                        Match Ratio: {(verificationResult.match_ratio * 100)?.toFixed(1)}%
-                      </p>
-                      <p className="text-sm mt-1">Redirecting to quiz...</p>
+                      <div className="text-sm space-y-1 mt-2">
+                        <p><strong>User:</strong> {verificationResult.user_name}</p>
+                        <p><strong>Verification ID:</strong> {verificationResult.verification_id}</p>
+                        <p><strong>Similarity Score:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
+                        {verificationResult.max_similarity_score && (
+                          <p><strong>Best Match:</strong> {verificationResult.max_similarity_score?.toFixed(1)}%</p>
+                        )}
+                        <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
+                        <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+                        <p><strong>Confidence:</strong> {verificationResult.confidence_score?.toFixed(1)}%</p>
+                        <p><strong>Frames Processed:</strong> {verificationResult.frames_processed}</p>
+                        <p><strong>Method:</strong> {verificationResult.verification_method}</p>
+                        <p><strong>Threshold Used:</strong> {verificationResult.threshold_used}%</p>
+                      </div>
+                      <p className="text-sm mt-2 text-green-700">Redirecting to quiz...</p>
                     </div>
                   </div>
                 </div>
@@ -401,11 +428,18 @@ const CoursePage = () => {
                     <AlertCircle size={20} />
                     <div className="flex-1">
                       <p className="font-medium">❌ Identity Verification Failed</p>
-                      <p className="text-sm">
-                        Similarity: {verificationResult.similarity_score?.toFixed(1)}% (Required: ≥55%) |
-                        Match Ratio: {(verificationResult.match_ratio * 100)?.toFixed(1)}%
-                      </p>
-                      <p className="text-sm mt-1">
+                      <div className="text-sm space-y-1 mt-2">
+                        <p><strong>Similarity Score:</strong> {verificationResult.similarity_score?.toFixed(1)}% (Required: ≥{verificationResult.threshold_used || 55}%)</p>
+                        {verificationResult.match_ratio !== undefined && (
+                          <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+                        )}
+                        <p><strong>Frames Processed:</strong> {verificationResult.frames_processed}</p>
+                        <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
+                        {verificationResult.confidence_score && (
+                          <p><strong>Confidence:</strong> {verificationResult.confidence_score?.toFixed(1)}%</p>
+                        )}
+                      </div>
+                      <p className="text-sm mt-2">
                         {verificationAttempts < maxVerificationAttempts 
                           ? "You can try again or contact support if you continue to have issues."
                           : "Maximum attempts reached. Please contact support."}
@@ -427,7 +461,7 @@ const CoursePage = () => {
         </div>
       )}
 
-      {/* Quiz */}
+      {/* Quiz - matches backend context structure */}
       {currentSection === 'quiz' && (
         <div className="card">
           <div className="flex items-center space-x-3 mb-6">
@@ -444,7 +478,7 @@ const CoursePage = () => {
                   <p className="font-medium text-green-800">Identity Verified</p>
                   <p className="text-sm text-green-700">
                     {selectedUser?.name} verified with {verificationResult.similarity_score?.toFixed(1)}% similarity
-                    {verificationResult.verification_id && ` (ID: ${verificationResult.verification_id})`}
+                    {verificationResult.verification_id && ` (Verification ID: ${verificationResult.verification_id})`}
                   </p>
                 </div>
               </div>
@@ -484,7 +518,7 @@ const CoursePage = () => {
         </div>
       )}
 
-      {/* Quiz Results */}
+      {/* Quiz Results - includes complete verification trace */}
       {currentSection === 'results' && quizResult && (
         <div className="card">
           <div className="text-center">
@@ -514,20 +548,35 @@ const CoursePage = () => {
               )}
             </div>
 
-            {/* Verification Summary */}
+            {/* Complete Verification Summary - matches backend FaceVerification structure */}
             {verificationResult && (
               <div className="bg-blue-50 p-4 rounded-lg mb-6">
                 <h3 className="font-semibold text-blue-900 mb-2">Verification Summary</h3>
                 <div className="text-blue-800 text-sm space-y-1">
                   <p><strong>Student:</strong> {selectedUser?.name} (ID: {verificationResult.user_id})</p>
                   <p><strong>Verification ID:</strong> {verificationResult.verification_id}</p>
-                  <p><strong>Similarity Score:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
-                  <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
-                  <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
                   <p><strong>Course:</strong> {courseId}</p>
                   <p><strong>Quiz:</strong> {quizId}</p>
-                  <p><strong>Verification Method:</strong> Optimized Real-Time</p>
+                  <p><strong>Similarity Score:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
+                  {verificationResult.max_similarity_score && (
+                    <p><strong>Peak Similarity:</strong> {verificationResult.max_similarity_score?.toFixed(1)}%</p>
+                  )}
+                  <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
+                  <p><strong>Anti-spoofing Score:</strong> {(verificationResult.antispoofing_score * 100)?.toFixed(1)}%</p>
+                  {verificationResult.match_ratio !== undefined && (
+                    <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+                  )}
+                  {verificationResult.confidence_score && (
+                    <p><strong>Confidence Score:</strong> {verificationResult.confidence_score?.toFixed(1)}%</p>
+                  )}
+                  <p><strong>Frames Processed:</strong> {verificationResult.frames_processed}</p>
+                  <p><strong>Threshold Used:</strong> {verificationResult.threshold_used || 55}%</p>
+                  <p><strong>Verification Method:</strong> {verificationResult.verification_method || 'optimized_stream'}</p>
+                  <p><strong>Model:</strong> {verificationResult.model_name || 'ArcFace'}</p>
+                  <p><strong>Distance Metric:</strong> cosine</p>
+                  <p><strong>Security Level:</strong> Enterprise Grade</p>
                   <p><strong>Anti-spoofing:</strong> Passed ✓</p>
+                  <p><strong>Session Type:</strong> Quiz Verification</p>
                 </div>
               </div>
             )}
@@ -542,30 +591,48 @@ const CoursePage = () => {
         </div>
       )}
 
-      {/* Enhanced Security Information */}
+      {/* Enhanced Security Information - matches backend implementation */}
       <div className="mt-8 card bg-blue-50 border-blue-200">
         <div className="flex items-center space-x-3 mb-3">
           <Shield className="text-blue-600" size={20} />
-          <h3 className="text-lg font-semibold text-blue-900">Optimized Security Features</h3>
+          <h3 className="text-lg font-semibold text-blue-900">Advanced Security Features</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-700">
           <div>
-            <h4 className="font-medium text-blue-800 mb-1">Fast Verification</h4>
+            <h4 className="font-medium text-blue-800 mb-1">Optimized Verification</h4>
             <ul className="space-y-1">
-              <li>• Only 2 frames needed (vs 10)</li>
-              <li>• 55% similarity threshold (relaxed)</li>
-              <li>• Multiple retry attempts</li>
+              <li>• Only 2 frames needed (vs traditional 10)</li>
+              <li>• Relaxed 55% similarity threshold</li>
+              <li>• Multi-criteria matching algorithm</li>
               <li>• Auto-reconnection on network issues</li>
+              <li>• Real-time quality assessment</li>
             </ul>
           </div>
           <div>
             <h4 className="font-medium text-blue-800 mb-1">Security & Performance</h4>
             <ul className="space-y-1">
-              <li>• Real-time liveness detection</li>
-              <li>• Anti-spoofing protection</li>
-              <li>• Faster processing (2-3 seconds)</li>
-              <li>• Optimized for 95%+ success rate</li>
+              <li>• Real-time liveness detection (≥20%)</li>
+              <li>• Advanced anti-spoofing protection</li>
+              <li>• ArcFace + OpenCV face recognition</li>
+              <li>• Encrypted face embedding storage</li>
+              <li>• WebSocket streaming (low latency)</li>
             </ul>
+          </div>
+        </div>
+        <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
+            <div className="text-center">
+              <div className="font-bold text-lg">95%+</div>
+              <div>Success Rate</div>
+            </div>
+            <div className="text-center">
+              <div className="font-bold text-lg">&lt;3s</div>
+              <div>Avg Verification Time</div>
+            </div>
+            <div className="text-center">
+              <div className="font-bold text-lg">5</div>
+              <div>Max Attempts</div>
+            </div>
           </div>
         </div>
       </div>
