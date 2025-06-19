@@ -100,33 +100,93 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
   }, [])
 
   const startVideoStream = useCallback(async () => {
-    try {
-      const constraints = {
+    // Try multiple constraint sets, starting with ideal and falling back to simpler ones
+    const constraintSets = [
+      // Ideal constraints for verification
+      {
         video: {
           width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
           height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
-          frameRate: { ideal: 20, max: 30 },  // Higher frame rate for verification
+          frameRate: { ideal: 20, max: 30 },
           facingMode: 'user'
         },
         audio: false
+      },
+      // Fallback without frameRate max constraint
+      {
+        video: {
+          width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
+          height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
+          frameRate: { ideal: 20 },
+          facingMode: 'user'
+        },
+        audio: false
+      },
+      // Fallback without frameRate constraint at all
+      {
+        video: {
+          width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
+          height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
+          facingMode: 'user'
+        },
+        audio: false
+      },
+      // Minimal constraints - just front camera
+      {
+        video: {
+          facingMode: 'user'
+        },
+        audio: false
+      },
+      // Last resort - any video
+      {
+        video: true,
+        audio: false
       }
+    ]
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-      }
+    for (let i = 0; i < constraintSets.length; i++) {
+      try {
+        console.log(`Trying verification camera constraints set ${i + 1}/${constraintSets.length}`)
+        const stream = await navigator.mediaDevices.getUserMedia(constraintSets[i])
+        streamRef.current = stream
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+        }
 
-      return true
-    } catch (error) {
-      console.error('Error accessing camera:', error)
-      setError('Failed to access camera. Please check permissions.')
-      if (onError) {
-        onError('Camera access failed')
+        console.log('✅ Verification camera stream started successfully')
+        return true
+      } catch (error) {
+        console.warn(`Verification camera constraints set ${i + 1} failed:`, error)
+        
+        // If this is the last constraint set, show the error
+        if (i === constraintSets.length - 1) {
+          console.error('All verification camera constraint sets failed:', error)
+          
+          // Provide specific error messages based on error type
+          let errorMessage = 'Failed to access camera.'
+          if (error.name === 'NotAllowedError') {
+            errorMessage = 'Camera access denied. Please allow camera permissions and refresh the page.'
+          } else if (error.name === 'NotFoundError') {
+            errorMessage = 'No camera found. Please connect a camera and try again.'
+          } else if (error.name === 'OverconstrainedError') {
+            errorMessage = 'Camera does not support required settings. Using basic camera access.'
+          } else if (error.name === 'NotReadableError') {
+            errorMessage = 'Camera is already in use by another application.'
+          }
+          
+          setError(errorMessage)
+          if (onError) {
+            onError(errorMessage)
+          }
+          return false
+        }
+        // Continue to next constraint set
       }
-      return false
     }
+    
+    return false
   }, [onError])
 
   const connectWebSocket = useCallback(async () => {
