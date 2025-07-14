@@ -1,59 +1,50 @@
-// app/status/page.tsx - Perfectly aligned with backend models and API
+// app/status/page.tsx - Complete Status Page with Real Database Users
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import { faceAPI, FaceStatusResponse, VerificationHistoryResponse, SystemStatsResponse } from '@/lib/api'
-import { Activity, UserCheck, History, TrendingUp, CheckCircle, XCircle, Clock, Database, Wifi, Server, Shield, Eye, Award } from 'lucide-react'
+import { useUsers, useUserWithFaceStatus } from '@/hooks/useUsers'
+import { Activity, UserCheck, History, TrendingUp, CheckCircle, XCircle, Clock, Database, Wifi, Server, Shield, Eye, Award, Loader, BookOpen } from 'lucide-react'
 
 const StatusPage = () => {
-  const [userId, setUserId] = useState<number>(1)
-  const [faceStatus, setFaceStatus] = useState<FaceStatusResponse | null>(null)
   const [verificationHistory, setVerificationHistory] = useState<VerificationHistoryResponse | null>(null)
   const [systemStats, setSystemStats] = useState<SystemStatsResponse | null>(null)
   const [systemHealth, setSystemHealth] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Demo users - matches backend AppUser structure
-  const demoUsers = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', role: 'Student' },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'Student' },
-    { id: 3, name: 'Bob Johnson', email: 'bob@example.com', role: 'Instructor' },
-    { id: 4, name: 'Alice Wilson', email: 'alice@example.com', role: 'Student' },
-  ]
+  // Use real users from database
+  const {
+    users,
+    selectedUser,
+    selectedUserId,
+    setSelectedUserId,
+    loading: usersLoading,
+    error: usersError,
+    stats: userStats
+  } = useUsers()
 
-  useEffect(() => {
-    const saved = localStorage.getItem('selectedUserId')
-    if (saved) {
-      setUserId(parseInt(saved))
-    }
-  }, [])
+  // Get face status for selected user
+  const {
+    faceStatus,
+    faceLoading: statusLoading,
+    faceError
+  } = useUserWithFaceStatus(selectedUserId)
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!selectedUserId) return
+
       try {
         setLoading(true)
         setError(null)
         
         // Fetch all data in parallel for better performance
-        const [statusResult, historyResult, statsResult, healthResult] = await Promise.allSettled([
-          faceAPI.getFaceStatus(userId),
-          faceAPI.getVerificationHistory(userId, 20),
+        const [historyResult, statsResult, healthResult] = await Promise.allSettled([
+          faceAPI.getVerificationHistory(selectedUserId, 20),
           faceAPI.getStats(),
           faceAPI.getHealth()
         ])
-        
-        // Handle face status
-        if (statusResult.status === 'fulfilled') {
-          setFaceStatus(statusResult.value)
-        } else {
-          console.error('Failed to fetch face status:', statusResult.reason)
-          setFaceStatus({
-            user_id: userId,
-            user_name: demoUsers.find(u => u.id === userId)?.name || `User ${userId}`,
-            registered: false
-          })
-        }
         
         // Handle verification history
         if (historyResult.status === 'fulfilled') {
@@ -61,7 +52,7 @@ const StatusPage = () => {
         } else {
           console.error('Failed to fetch verification history:', historyResult.reason)
           setVerificationHistory({
-            user_id: userId,
+            user_id: selectedUserId,
             total_verifications: 0,
             verifications: []
           })
@@ -73,7 +64,7 @@ const StatusPage = () => {
         } else {
           console.error('Failed to fetch system stats:', statsResult.reason)
           setSystemStats({
-            total_users: 4,
+            total_users: userStats?.total_users || 0,
             registered_faces: 0,
             registration_rate: 0,
             success_rate_24h: 0,
@@ -105,14 +96,11 @@ const StatusPage = () => {
       }
     }
 
-    if (userId) {
-      fetchData()
-    }
-  }, [userId])
+    fetchData()
+  }, [selectedUserId, userStats])
 
   const handleUserChange = (newUserId: number) => {
-    setUserId(newUserId)
-    localStorage.setItem('selectedUserId', newUserId.toString())
+    setSelectedUserId(newUserId)
   }
 
   const formatDate = (dateString: string) => {
@@ -140,9 +128,8 @@ const StatusPage = () => {
     }
   }
 
-  const selectedUser = demoUsers.find(u => u.id === userId)
-
-  if (loading) {
+  // Show loading state if users are still loading
+  if (usersLoading || (loading && !selectedUserId)) {
     return (
       <div className="container">
         <div className="text-center py-12">
@@ -178,28 +165,62 @@ const StatusPage = () => {
       {/* User Selection */}
       <div className="card mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-3">Select User</h2>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {demoUsers.map(user => (
-            <button
-              key={user.id}
-              onClick={() => handleUserChange(user.id)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                userId === user.id
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {user.name}
-            </button>
-          ))}
-        </div>
-        <p className="text-sm text-gray-600">
-          Selected: {selectedUser?.name} (ID: {userId}) | Role: {selectedUser?.role}
-        </p>
+
+        {/* Error state */}
+        {usersError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center space-x-2">
+              <XCircle size={20} className="text-red-600" />
+              <div>
+                <p className="font-medium text-red-800">Failed to Load Users</p>
+                <p className="text-sm text-red-600">{usersError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Users selection */}
+        {!usersError && users.length > 0 && (
+          <>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {users.slice(0, 8).map(user => ( // Show first 8 users for status
+                <button
+                  key={user.id}
+                  onClick={() => handleUserChange(user.id)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    selectedUserId === user.id
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {user.name.split(' ')[0]} {/* Show first name only */}
+                </button>
+              ))}
+            </div>
+            
+            {users.length > 8 && (
+              <div className="text-center text-sm text-gray-600 mb-3">
+                Showing 8 of {users.length} users.
+              </div>
+            )}
+
+            <p className="text-sm text-gray-600">
+              Selected: {selectedUser ? `${selectedUser.name} (ID: ${selectedUser.id})` : 'None selected'} | 
+              Role: {selectedUser?.role} | Status: {selectedUser?.status}
+            </p>
+          </>
+        )}
+
+        {/* No users state */}
+        {!usersError && users.length === 0 && (
+          <div className="text-center py-4">
+            <p className="text-gray-600">No users found in database</p>
+          </div>
+        )}
       </div>
 
       {/* Registration Status - matches backend Face model */}
-      {faceStatus && (
+      {selectedUserId && (
         <div className="card mb-6">
           <div className="flex items-center space-x-3 mb-4">
             <UserCheck className="text-primary-600" size={24} />
@@ -210,39 +231,60 @@ const StatusPage = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-2">User Information</h3>
               <div className="space-y-1 text-sm">
-                <p><span className="text-gray-600">User ID:</span> {faceStatus.user_id}</p>
-                <p><span className="text-gray-600">Name:</span> {faceStatus.user_name}</p>
+                <p><span className="text-gray-600">User ID:</span> {selectedUser?.id}</p>
+                <p><span className="text-gray-600">Name:</span> {selectedUser?.name}</p>
                 <p><span className="text-gray-600">Role:</span> {selectedUser?.role}</p>
                 <p><span className="text-gray-600">Email:</span> {selectedUser?.email}</p>
+                <p><span className="text-gray-600">Status:</span> {selectedUser?.status}</p>
+                <p><span className="text-gray-600">Salutation:</span> {selectedUser?.salutation}</p>
               </div>
             </div>
             
             <div>
               <h3 className="font-semibold text-gray-900 mb-2">Face Registration Details</h3>
-              {faceStatus.registered ? (
-                <div className="space-y-1 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle size={16} className="text-green-600" />
-                    <span className="text-green-600 font-medium">Registered</span>
-                  </div>
-                  {faceStatus.face_id && <p><span className="text-gray-600">Face ID:</span> {faceStatus.face_id}</p>}
-                  {faceStatus.quality_score && <p><span className="text-gray-600">Quality Score:</span> {faceStatus.quality_score.toFixed(1)}%</p>}
-                  {faceStatus.face_confidence && <p><span className="text-gray-600">Face Confidence:</span> {(faceStatus.face_confidence * 100).toFixed(1)}%</p>}
-                  <p><span className="text-gray-600">Model:</span> {faceStatus.model_name || 'ArcFace'}</p>
-                  <p><span className="text-gray-600">Detector:</span> {faceStatus.detector_backend || 'opencv'}</p>
-                  <p><span className="text-gray-600">Source:</span> {faceStatus.registration_source || 'unknown'}</p>
-                  {faceStatus.registered_at && (
-                    <p><span className="text-gray-600">Registered:</span> {formatDate(faceStatus.registered_at)}</p>
-                  )}
+              
+              {statusLoading && (
+                <div className="flex items-center space-x-2">
+                  <Loader className="animate-spin h-4 w-4 text-primary-600" />
+                  <span className="text-sm text-gray-600">Checking face registration...</span>
                 </div>
-              ) : (
+              )}
+
+              {faceError && (
                 <div className="flex items-center space-x-2">
                   <XCircle size={16} className="text-red-600" />
-                  <span className="text-red-600 font-medium">Not Registered</span>
-                  <a href="/register" className="text-blue-600 hover:underline text-sm ml-2">
-                    Register now →
-                  </a>
+                  <span className="text-red-600 font-medium text-sm">Error: {faceError}</span>
                 </div>
+              )}
+
+              {!statusLoading && !faceError && faceStatus && (
+                <>
+                  {faceStatus.registered ? (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle size={16} className="text-green-600" />
+                        <span className="text-green-600 font-medium">Registered</span>
+                      </div>
+                      {faceStatus.face_id && <p><span className="text-gray-600">Face ID:</span> {faceStatus.face_id}</p>}
+                      {faceStatus.quality_score && <p><span className="text-gray-600">Quality Score:</span> {faceStatus.quality_score.toFixed(1)}%</p>}
+                      {faceStatus.face_confidence && <p><span className="text-gray-600">Face Confidence:</span> {(faceStatus.face_confidence * 100).toFixed(1)}%</p>}
+                      <p><span className="text-gray-600">Model:</span> {faceStatus.model_name || 'ArcFace'}</p>
+                      <p><span className="text-gray-600">Detector:</span> {faceStatus.detector_backend || 'opencv'}</p>
+                      <p><span className="text-gray-600">Source:</span> {faceStatus.registration_source || 'unknown'}</p>
+                      {faceStatus.registered_at && (
+                        <p><span className="text-gray-600">Registered:</span> {formatDate(faceStatus.registered_at)}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <XCircle size={16} className="text-red-600" />
+                      <span className="text-red-600 font-medium">Not Registered</span>
+                      <a href="/register" className="text-blue-600 hover:underline text-sm ml-2">
+                        Register now →
+                      </a>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -383,11 +425,36 @@ const StatusPage = () => {
               System Health: {systemStats.system_health}
             </span>
           </div>
+
+          {/* Additional user stats if available */}
+          {userStats && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 bg-indigo-50 rounded-lg">
+                <div className="text-lg font-bold text-indigo-600">{userStats.students}</div>
+                <div className="text-sm text-indigo-800">Students</div>
+              </div>
+              
+              <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                <div className="text-lg font-bold text-emerald-600">{userStats.instructors}</div>
+                <div className="text-sm text-emerald-800">Instructors</div>
+              </div>
+              
+              <div className="text-center p-3 bg-rose-50 rounded-lg">
+                <div className="text-lg font-bold text-rose-600">{userStats.staff}</div>
+                <div className="text-sm text-rose-800">Staff</div>
+              </div>
+              
+              <div className="text-center p-3 bg-amber-50 rounded-lg">
+                <div className="text-lg font-bold text-amber-600">{userStats.admins}</div>
+                <div className="text-sm text-amber-800">Admins</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Verification History - matches backend FaceVerification model */}
-      {verificationHistory && (
+      {selectedUserId && verificationHistory && (
         <div className="card">
           <div className="flex items-center space-x-3 mb-4">
             <History className="text-primary-600" size={24} />
@@ -518,6 +585,16 @@ const StatusPage = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* No user selected for verification history */}
+      {!selectedUserId && (
+        <div className="card">
+          <div className="text-center py-8">
+            <History size={48} className="text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600">Select a user to view verification history</p>
+          </div>
         </div>
       )}
 

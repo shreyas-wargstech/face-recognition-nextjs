@@ -1,4 +1,4 @@
-// lib/api.ts - Updated to align perfectly with backend
+// lib/api.ts - Updated to work with real database users
 import axios from 'axios'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -18,7 +18,33 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interfaces aligned with backend models
+// Updated User interface to match database structure
+export interface User {
+  id: number
+  name: string
+  email?: string
+  mobile?: string
+  role: string
+  roleId: number
+  status: string
+  active: boolean
+  salutation?: string
+  lastLogin?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UserStats {
+  total_users: number
+  students: number
+  instructors: number
+  staff: number
+  admins: number
+  registered_faces: number
+  registration_rate: number
+}
+
+// Response interfaces (keeping existing ones)
 export interface AppUser {
   id: number
   Name: string
@@ -238,11 +264,7 @@ export const faceAPI = {
     } catch (error: any) {
       // Handle case where user is not found
       if (error.response?.status === 404) {
-        return {
-          user_id: userId,
-          user_name: `User ${userId}`,
-          registered: false
-        }
+        throw new Error('User not found')
       }
       throw error
     }
@@ -299,14 +321,48 @@ export const faceAPI = {
     }
   },
 
-  // Fetch all users
-  async fetchAllUsers(): Promise<AppUser[]> {
+  // USER MANAGEMENT - NEW METHODS FOR DATABASE USERS
+  // Fetch all users from database
+  async fetchAllUsers(): Promise<User[]> {
     try {
       const response = await api.get('/api/v1/users')
       return response.data
     } catch (error) {
       console.error('Failed to fetch users:', error)
-      return []
+      throw new Error('Failed to fetch users from database')
+    }
+  },
+
+  // Fetch specific user by ID
+  async fetchUserById(userId: number): Promise<User> {
+    try {
+      const response = await api.get(`/api/v1/user/${userId}`)
+      return response.data
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error('User not found')
+      }
+      console.error(`Failed to fetch user ${userId}:`, error)
+      throw new Error('Failed to fetch user details')
+    }
+  },
+
+  // Get user statistics
+  async getUserStats(): Promise<UserStats> {
+    try {
+      const response = await api.get('/api/v1/users/stats')
+      return response.data
+    } catch (error) {
+      console.error('Failed to fetch user stats:', error)
+      return {
+        total_users: 0,
+        students: 0,
+        instructors: 0,
+        staff: 0,
+        admins: 0,
+        registered_faces: 0,
+        registration_rate: 0
+      }
     }
   },
 
