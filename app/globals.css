@@ -65,3 +65,89 @@ body {
 .alert-info {
   @apply bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg;
 }
+
+.gradient-overlay {
+  background: linear-gradient(135deg, rgba(0,0,0,0.6) 0%, transparent 50%, rgba(0,0,0,0.4) 100%);
+}
+
+/* Professional shadows */
+.professional-shadow {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Smooth animations */
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Backdrop blur support */
+.backdrop-blur-custom {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Professional button gradients */
+.btn-gradient-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.btn-gradient-purple {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+.btn-gradient-green {
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+}
+
+.btn-gradient-red {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.btn-gradient-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+}
+
+/* Animated progress bars */
+.progress-bar-animated {
+  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #10b981 100%);
+  background-size: 200% 100%;
+  animation: progressShimmer 2s ease-in-out infinite;
+}
+
+@keyframes progressShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Professional metric cards */
+.metric-card {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+/* Success/error overlays */
+.success-overlay {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%);
+}
+
+.error-overlay {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%);
+}
+
+.webcam-container {
+  @apply w-full max-w-sm mx-auto;
+}
+
+@media (min-width: 768px) {
+  .webcam-container {
+    @apply max-w-2xl;
+  }
+}
+
+@media (min-width: 1024px) {
+  .webcam-container {
+    @apply max-w-4xl;
+  }
+}

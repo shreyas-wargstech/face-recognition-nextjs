@@ -1,8 +1,8 @@
-// components/RealTimeFaceRegistration.tsx - Perfectly aligned with backend
+// components/RealTimeFaceRegistration.tsx - Professional Version
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Camera, CheckCircle, AlertCircle, Shield, StopCircle, PlayCircle, Loader, Wifi, WifiOff, RotateCcw } from 'lucide-react'
+import { Camera, CheckCircle, AlertCircle, Shield, StopCircle, PlayCircle, Loader, Wifi, WifiOff, RotateCcw, Activity, Signal, Zap } from 'lucide-react'
 
 interface RealTimeFaceRegistrationProps {
   userId: number
@@ -28,7 +28,7 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   const [isStreaming, setIsStreaming] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'reconnecting'>('disconnected')
-  const [status, setStatus] = useState<string>('Ready to start registration')
+  const [status, setStatus] = useState<string>('Ready to start face registration')
   const [framesCollected, setFramesCollected] = useState(0)
   const [framesSent, setFramesSent] = useState(0)
   const [requiredFrames, setRequiredFrames] = useState(3)
@@ -43,18 +43,18 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   const [networkLatency, setNetworkLatency] = useState<number | null>(null)
   const [frameCount, setFrameCount] = useState(0)
   const [processedCount, setProcessedCount] = useState(0)
+  const [isHovered, setIsHovered] = useState(false)
 
   // Backend-aligned settings from main.py
   const MAX_RETRIES = 3
   const RECONNECT_DELAY = 3000
-  const FRAME_CAPTURE_INTERVAL = 1000  // 1 second - matches backend frame_skip
-  const FRAME_QUALITY = 0.6  // Matches backend quality setting
-  const MAX_FRAME_SIZE = { width: 480, height: 360 }  // Matches backend
-  const HEARTBEAT_INTERVAL = 20000  // 20 seconds - matches backend
-  const CONNECTION_TIMEOUT = 15000  // 15 seconds - matches backend
+  const FRAME_CAPTURE_INTERVAL = 1000
+  const FRAME_QUALITY = 0.6
+  const MAX_FRAME_SIZE = { width: 480, height: 360 }
+  const HEARTBEAT_INTERVAL = 20000
+  const CONNECTION_TIMEOUT = 15000
 
   const buildWebSocketUrl = useCallback(() => {
-    // Exact URL format from backend
     return `ws://localhost:8000/ws/face-registration/${userId}`
   }, [userId])
 
@@ -82,9 +82,7 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   }, [])
 
   const startVideoStream = useCallback(async () => {
-    // Try multiple constraint sets, starting with ideal and falling back to simpler ones
     const constraintSets = [
-      // Ideal constraints
       {
         video: {
           width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
@@ -94,7 +92,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
         },
         audio: false
       },
-      // Fallback without frameRate max constraint
       {
         video: {
           width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
@@ -104,7 +101,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
         },
         audio: false
       },
-      // Fallback without frameRate constraint at all
       {
         video: {
           width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
@@ -113,14 +109,12 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
         },
         audio: false
       },
-      // Minimal constraints - just front camera
       {
         video: {
           facingMode: 'user'
         },
         audio: false
       },
-      // Last resort - any video
       {
         video: true,
         audio: false
@@ -142,11 +136,9 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       } catch (error) {
         console.warn(`Camera constraints set ${i + 1} failed:`, error)
         
-        // If this is the last constraint set, show the error
         if (i === constraintSets.length - 1) {
           console.error('All camera constraint sets failed:', error)
           
-          // Provide specific error messages based on error type
           let errorMessage = 'Failed to access camera.'
           if (error.name === 'NotAllowedError') {
             errorMessage = 'Camera access denied. Please allow camera permissions and refresh the page.'
@@ -164,7 +156,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
           }
           return false
         }
-        // Continue to next constraint set
       }
     }
     
@@ -184,7 +175,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
-      // Connection timeout - matches backend
       const connectionTimeout = setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
           ws.close()
@@ -208,7 +198,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
           const message = JSON.parse(event.data)
           console.log('📨 Received message:', message.type)
 
-          // Handle all message types from backend exactly as implemented
           switch (message.type) {
             case 'connected':
               setRequiredFrames(message.required_frames || 3)
@@ -229,7 +218,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
               } else {
                 setStatus(message.message)
                 setProcessingTime(message.processing_time)
-                // Don't treat failed frame processing as error - just feedback
               }
               break
 
@@ -265,7 +253,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
               break
 
             case 'heartbeat':
-              // Server heartbeat received - keep connection alive
               break
 
             case 'timeout_warning':
@@ -296,13 +283,11 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
         
         console.log('❌ WebSocket closed:', event.code, event.reason)
         
-        // Handle specific close codes from backend
         if (event.code === 4004) {
           setError('User not found')
           setStatus('❌ User not found')
           setConnectionState('disconnected')
         } else if (!success && retryCount < MAX_RETRIES) {
-          // Auto-reconnect logic matching backend expectations
           setConnectionState('reconnecting')
           setStatus(`Connection lost. Reconnecting... (${retryCount + 1}/${MAX_RETRIES})`)
           
@@ -347,17 +332,13 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
     }
 
     try {
-      // Set canvas dimensions to match backend expectations
       canvas.width = MAX_FRAME_SIZE.width
       canvas.height = MAX_FRAME_SIZE.height
 
-      // Draw and resize frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-      // Convert to base64 with quality matching backend
       const frameData = canvas.toDataURL('image/jpeg', FRAME_QUALITY)
 
-      // Send frame with exact format expected by backend
       wsRef.current.send(JSON.stringify({
         type: 'frame',
         frame: frameData,
@@ -372,22 +353,18 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   }, [])
 
   const stopStreaming = useCallback(() => {
-    // Stop frame capture
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
 
-    // Stop heartbeat
     stopHeartbeat()
 
-    // Clear reconnect timeout
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
     }
 
-    // Close WebSocket with proper format expected by backend
     if (wsRef.current) {
       try {
         wsRef.current.send(JSON.stringify({ type: 'stop' }))
@@ -398,7 +375,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
       wsRef.current = null
     }
 
-    // Stop video stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
@@ -422,7 +398,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   }, [stopStreaming])
 
   const handleRestart = useCallback(() => {
-    // Reset all state to initial values
     setSuccess(false)
     setError(null)
     setFramesCollected(0)
@@ -440,7 +415,6 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
     handleStart()
   }, [handleStart])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopStreaming()
@@ -450,103 +424,94 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   const getConnectionIcon = () => {
     switch (connectionState) {
       case 'connected':
-        return <Wifi size={16} className="text-green-500" />
+        return <Wifi size={16} className="text-green-400" />
       case 'connecting':
       case 'reconnecting':
-        return <Loader size={16} className="text-yellow-500 animate-spin" />
+        return <Loader size={16} className="text-yellow-400 animate-spin" />
       default:
-        return <WifiOff size={16} className="text-red-500" />
+        return <WifiOff size={16} className="text-red-400" />
     }
   }
 
   const getConnectionText = () => {
     switch (connectionState) {
       case 'connected':
-        return `Connected ${networkLatency ? `(${networkLatency}ms)` : ''}`
+        return `LIVE ${networkLatency ? `(${networkLatency}ms)` : ''}`
       case 'connecting':
-        return 'Connecting...'
+        return 'CONNECTING...'
       case 'reconnecting':
-        return `Reconnecting... (${retryCount}/${MAX_RETRIES})`
+        return `RECONNECTING... (${retryCount}/${MAX_RETRIES})`
       default:
-        return 'Disconnected'
+        return 'DISCONNECTED'
     }
+  }
+
+  const getStatusColor = () => {
+    if (connectionState === 'connected' && isStreaming) return 'border-green-400 shadow-green-400/30 shadow-2xl'
+    if (connectionState === 'connecting') return 'border-yellow-400 shadow-yellow-400/30 shadow-xl'
+    return 'border-gray-400 shadow-gray-400/20 shadow-lg'
   }
 
   return (
     <div className={`flex flex-col items-center space-y-6 ${className}`}>
-      {/* Video Display */}
-      <div className="relative">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="w-[480px] h-[360px] object-cover rounded-lg border-2 border-gray-300 bg-black"
-        />
-        
-        {/* Status Overlay - matches backend messaging */}
-        <div className="absolute top-4 left-4 right-4">
-          <div className="bg-black bg-opacity-70 text-white p-3 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Registration Status</span>
-              <div className="flex items-center space-x-2">
-                {getConnectionIcon()}
-                <span className="text-xs">{getConnectionText()}</span>
-              </div>
+      {/* Professional Video Container */}
+      <div className="relative w-full max-w-2xl mx-auto">
+        <div 
+          className={`relative rounded-2xl overflow-hidden transition-all duration-300 border-2 ${getStatusColor()}`}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {/* Video Element */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-[400px] object-cover bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900"
+          />
+          
+          {/* Professional Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none" />
+          
+          {/* Corner Status Indicators */}
+          <div className="absolute top-4 left-4 flex items-center space-x-2">
+            <div className="bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center space-x-2">
+              {getConnectionIcon()}
+              <span className="text-white text-xs font-medium">
+                {getConnectionText()}
+              </span>
             </div>
             
-            <p className="text-sm">{status}</p>
-            
-            {/* Progress Bar - aligned with backend frame requirements */}
-            {requiredFrames > 0 && (
-              <div className="mt-2">
-                <div className="flex justify-between text-xs mb-1">
-                  <span>Progress ({framesCollected}/{requiredFrames})</span>
-                  <span>Sent: {framesSent} | Total: {frameCount}</span>
-                </div>
-                <div className="w-full bg-gray-600 rounded-full h-2">
-                  <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-
-            {/* Performance Metrics - matches backend data */}
-            {(processingTime !== null || networkLatency !== null) && (
-              <div className="mt-2 text-xs text-gray-300">
-                {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
-                {networkLatency !== null && <span>Latency: {networkLatency}ms</span>}
-              </div>
+            {isStreaming && (
+              <div className="bg-red-500/90 backdrop-blur-sm rounded-full w-3 h-3 animate-pulse" />
             )}
           </div>
-        </div>
 
-        {/* Quality Indicators - matches backend thresholds */}
-        {(qualityScore !== null || antispoofingScore !== null || faceConfidence !== null) && (
-          <div className="absolute bottom-4 left-4 right-4">
-            <div className="bg-black bg-opacity-70 text-white p-2 rounded-lg">
-              <div className="grid grid-cols-3 gap-2 text-xs">
+          {/* Quality Metrics - Top Right */}
+          {(qualityScore !== null || antispoofingScore !== null || faceConfidence !== null) && (
+            <div className="absolute top-4 right-4">
+              <div className="bg-black/70 backdrop-blur-sm rounded-xl px-3 py-2 space-y-1">
                 {qualityScore !== null && (
-                  <div>
-                    <span className="block text-gray-300">Quality</span>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-300">Quality</span>
                     <span className={`font-bold ${qualityScore >= 25 ? 'text-green-400' : qualityScore >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
                       {qualityScore.toFixed(1)}%
                     </span>
                   </div>
                 )}
+                
                 {antispoofingScore !== null && (
-                  <div>
-                    <span className="block text-gray-300">Liveness</span>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-300">Liveness</span>
                     <span className={`font-bold ${antispoofingScore >= 0.4 ? 'text-green-400' : 'text-red-400'}`}>
                       {(antispoofingScore * 100).toFixed(1)}%
                     </span>
                   </div>
                 )}
+                
                 {faceConfidence !== null && (
-                  <div>
-                    <span className="block text-gray-300">Detection</span>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-300">Detection</span>
                     <span className={`font-bold ${faceConfidence >= 0.5 ? 'text-green-400' : 'text-red-400'}`}>
                       {(faceConfidence * 100).toFixed(1)}%
                     </span>
@@ -554,127 +519,247 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
                 )}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Success Overlay */}
-        {success && (
-          <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center rounded-lg">
-            <div className="bg-green-500 text-white p-4 rounded-full">
-              <CheckCircle size={48} />
+          {/* Center Status Display */}
+          <div className="absolute bottom-6 left-6 right-6">
+            <div className="bg-black/80 backdrop-blur-md rounded-xl px-6 py-4 border border-white/10">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3">
+                  <Shield className="text-blue-400" size={20} />
+                  <span className="text-white font-medium">Face Registration</span>
+                </div>
+                
+                {requiredFrames > 0 && (
+                  <div className="text-right">
+                    <div className="text-xs text-gray-300">Progress</div>
+                    <div className="text-sm font-bold text-white">
+                      {framesCollected}/{requiredFrames}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <p className="text-gray-200 text-sm leading-relaxed">{status}</p>
+              
+              {/* Progress Bar */}
+              {requiredFrames > 0 && (
+                <div className="mt-3">
+                  <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="h-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>Frames: {framesSent} sent, {frameCount} total</span>
+                    <span>{Math.round((framesCollected / requiredFrames) * 100)}%</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Performance Metrics */}
+              {(processingTime !== null || networkLatency !== null) && (
+                <div className="mt-2 text-xs text-gray-400">
+                  {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
+                  {networkLatency !== null && <span>Network: {networkLatency}ms</span>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Success Overlay */}
+          {success && (
+            <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center rounded-2xl">
+              <div className="bg-green-500 text-white p-6 rounded-full shadow-2xl animate-pulse">
+                <CheckCircle size={48} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Professional Controls */}
+      <div className="space-y-4 w-full max-w-2xl">
+        {/* Main Controls */}
+        <div className="flex justify-center space-x-4">
+          {!isStreaming && !success && (
+            <button
+              onClick={handleStart}
+              disabled={connectionState === 'connecting'}
+              className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105"
+            >
+              <div className="flex items-center space-x-3">
+                {connectionState === 'connecting' ? (
+                  <Loader size={24} className="animate-spin" />
+                ) : (
+                  <PlayCircle size={24} />
+                )}
+                <span className="text-lg">
+                  {connectionState === 'connecting' ? 'Connecting...' : 'Start Registration'}
+                </span>
+              </div>
+              
+              {/* Loading indicator */}
+              {connectionState === 'connecting' && (
+                <div className="absolute bottom-0 left-0 h-1 bg-blue-400 rounded-full animate-pulse" style={{width: '60%'}} />
+              )}
+            </button>
+          )}
+
+          {isStreaming && (
+            <div className="flex space-x-3">
+              <button
+                onClick={handleStop}
+                className="group px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:from-red-500 hover:to-red-600 transition-all duration-200 transform hover:scale-105"
+              >
+                <div className="flex items-center space-x-2">
+                  <StopCircle size={20} />
+                  <span>Stop</span>
+                </div>
+              </button>
+              
+              <button
+                onClick={handleRestart}
+                className="group px-6 py-4 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:from-orange-500 hover:to-orange-600 transition-all duration-200 transform hover:scale-105"
+              >
+                <div className="flex items-center space-x-2">
+                  <RotateCcw size={20} />
+                  <span>Restart</span>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {success && (
+            <button
+              onClick={handleRestart}
+              className="group px-8 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:from-green-500 hover:to-green-600 transition-all duration-200 transform hover:scale-105"
+            >
+              <div className="flex items-center space-x-3">
+                <Camera size={24} />
+                <span className="text-lg">Register Again</span>
+              </div>
+            </button>
+          )}
+
+          {connectionState === 'disconnected' && retryCount >= MAX_RETRIES && !success && (
+            <button
+              onClick={handleRestart}
+              className="group px-8 py-4 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:from-orange-500 hover:to-orange-600 transition-all duration-200 transform hover:scale-105"
+            >
+              <div className="flex items-center space-x-3">
+                <PlayCircle size={24} />
+                <span className="text-lg">Retry Connection</span>
+              </div>
+            </button>
+          )}
+        </div>
+
+        {/* Performance Stats */}
+        {(framesSent > 0 || processingTime !== null) && (
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+              <Activity className="mr-2 text-blue-600" size={18} />
+              Session Performance
+            </h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{framesSent}</div>
+                <div className="text-xs text-gray-600">Frames Sent</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {processingTime ? `${processingTime.toFixed(0)}ms` : '0ms'}
+                </div>
+                <div className="text-xs text-gray-600">Avg Processing</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  {framesCollected > 0 ? Math.round((framesCollected / framesSent) * 100) : 0}%
+                </div>
+                <div className="text-xs text-gray-600">Success Rate</div>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Controls */}
-      <div className="flex space-x-4">
-        {!isStreaming && !success && (
-          <button
-            onClick={handleStart}
-            disabled={connectionState === 'connecting'}
-            className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
-          >
-            {connectionState === 'connecting' ? (
-              <Loader size={20} className="animate-spin" />
-            ) : (
-              <PlayCircle size={20} />
-            )}
-            <span>
-              {connectionState === 'connecting' ? 'Connecting...' : 'Start Registration'}
-            </span>
-          </button>
-        )}
-
-        {isStreaming && (
-          <div className="flex space-x-2">
-            <button
-              onClick={handleStop}
-              className="flex items-center space-x-2 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-            >
-              <StopCircle size={20} />
-              <span>Stop</span>
-            </button>
-            
-            <button
-              onClick={handleRestart}
-              className="flex items-center space-x-2 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-            >
-              <RotateCcw size={20} />
-              <span>Restart</span>
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <button
-            onClick={handleRestart}
-            className="flex items-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-          >
-            <Camera size={20} />
-            <span>Register Again</span>
-          </button>
-        )}
-
-        {connectionState === 'disconnected' && retryCount >= MAX_RETRIES && !success && (
-          <button
-            onClick={handleRestart}
-            className="flex items-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-          >
-            <PlayCircle size={20} />
-            <span>Retry Connection</span>
-          </button>
-        )}
-      </div>
-
       {/* Error Alert */}
       {error && (
-        <div className="w-full max-w-md bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <AlertCircle size={20} className="text-red-600" />
-            <div>
-              <p className="font-medium text-red-800">Registration Error</p>
+        <div className="w-full max-w-2xl bg-red-50 border-2 border-red-200 rounded-xl p-6">
+          <div className="flex items-center space-x-3">
+            <AlertCircle size={24} className="text-red-600 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-red-800 mb-1">Registration Error</p>
               <p className="text-sm text-red-600">{error}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Success Results - matches backend response structure */}
+      {/* Success Results */}
       {success && sessionData && (
-        <div className="w-full max-w-md bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-3">
-            <CheckCircle size={20} className="text-green-600" />
-            <p className="font-medium text-green-800">Registration Successful!</p>
+        <div className="w-full max-w-2xl bg-green-50 border-2 border-green-200 rounded-xl p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <CheckCircle size={24} className="text-green-600" />
+            <p className="font-semibold text-green-800 text-lg">Registration Successful!</p>
           </div>
-          <div className="text-sm text-green-700 space-y-1">
-            <p><strong>User:</strong> {sessionData.user_name}</p>
-            <p><strong>Face ID:</strong> {sessionData.face_id}</p>
-            <p><strong>Quality Score:</strong> {sessionData.quality_score?.toFixed(1)}%</p>
-            <p><strong>Anti-spoofing Score:</strong> {(sessionData.antispoofing_score * 100)?.toFixed(1)}%</p>
-            <p><strong>Frames Processed:</strong> {sessionData.frames_processed}</p>
-            <p><strong>Model:</strong> {sessionData.model_name || 'ArcFace'}</p>
-            {sessionData.avg_processing_time && (
-              <p><strong>Avg Processing Time:</strong> {sessionData.avg_processing_time.toFixed(0)}ms</p>
-            )}
+          <div className="grid grid-cols-2 gap-4 text-sm text-green-700">
+            <div className="space-y-2">
+              <p><strong>User:</strong> {sessionData.user_name}</p>
+              <p><strong>Face ID:</strong> {sessionData.face_id}</p>
+              <p><strong>Quality Score:</strong> {sessionData.quality_score?.toFixed(1)}%</p>
+              <p><strong>Model:</strong> {sessionData.model_name || 'ArcFace'}</p>
+            </div>
+            <div className="space-y-2">
+              <p><strong>Anti-spoofing:</strong> {(sessionData.antispoofing_score * 100)?.toFixed(1)}%</p>
+              <p><strong>Frames Processed:</strong> {sessionData.frames_processed}</p>
+              <p><strong>Source:</strong> {sessionData.registration_source || 'stream_v2'}</p>
+              {sessionData.avg_processing_time && (
+                <p><strong>Avg Time:</strong> {sessionData.avg_processing_time.toFixed(0)}ms</p>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Instructions - aligned with backend settings */}
-      <div className="w-full max-w-md bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center space-x-2 mb-3">
+      {/* Professional Instructions */}
+      <div className="w-full max-w-2xl bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
+        <div className="flex items-center space-x-3 mb-4">
           <Shield size={20} className="text-blue-600" />
-          <p className="font-medium text-blue-800">Registration Instructions</p>
+          <p className="font-semibold text-blue-800 text-lg">Registration Guidelines</p>
         </div>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Need {requiredFrames} high-quality frames</li>
-          <li>• Quality threshold: 25% (relaxed)</li>
-          <li>• Liveness threshold: 40% (moderate)</li>
-          <li>• Look directly at camera and stay still</li>
-          <li>• System processes 1 frame per second</li>
-          <li>• Auto-reconnection on network issues</li>
-        </ul>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            {[
+              'Position your face in the center',
+              'Ensure good lighting on your face',
+              'Look directly at the camera'
+            ].map((instruction, index) => (
+              <div key={index} className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-bold text-blue-600">{index + 1}</span>
+                </div>
+                <span className="text-sm text-blue-700">{instruction}</span>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {[
+              'Keep your face steady during capture',
+              'Remove glasses or masks if possible',
+              'System will capture 3 high-quality frames'
+            ].map((instruction, index) => (
+              <div key={index} className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-xs font-bold text-blue-600">{index + 4}</span>
+                </div>
+                <span className="text-sm text-blue-700">{instruction}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Hidden canvas for frame capture */}
