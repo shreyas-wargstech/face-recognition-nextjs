@@ -1,4 +1,4 @@
-// components/RealTimeFaceRegistration.tsx - Professional Version
+// components/RealTimeFaceRegistration.tsx - Fixed with status outside webcam
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
@@ -17,6 +17,23 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
   onError, 
   className = "" 
 }) => {
+  // Utility function to safely format numbers and percentages
+  const formatNumber = (value: any, multiplier: number = 1, decimals: number = 1): string => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return 'N/A'
+    }
+    const numericValue = typeof value === 'string' ? parseFloat(value) : value
+    if (isNaN(numericValue)) {
+      return 'N/A'
+    }
+    return (numericValue * multiplier).toFixed(decimals)
+  }
+
+  // Utility function to format percentage values
+  const formatPercentage = (value: any, decimals: number = 1): string => {
+    const formatted = formatNumber(value, 100, decimals)
+    return formatted === 'N/A' ? 'N/A' : formatted + '%'
+  }
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -454,14 +471,14 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
 
   return (
     <div className={`flex flex-col items-center space-y-6 ${className}`}>
-      {/* Professional Video Container */}
+      {/* Professional Video Container - CLEAN VIEW */}
       <div className="relative w-full max-w-2xl mx-auto">
         <div 
           className={`relative rounded-2xl overflow-hidden transition-all duration-300 border-2 ${getStatusColor()}`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Video Element */}
+          {/* Video Element - Clean without overlays */}
           <video
             ref={videoRef}
             autoPlay
@@ -470,12 +487,9 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
             className="w-full h-[400px] object-cover bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900"
           />
           
-          {/* Professional Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none" />
-          
-          {/* Corner Status Indicators */}
+          {/* Minimal Status Indicators - Top Only */}
           <div className="absolute top-4 left-4 flex items-center space-x-2">
-            <div className="bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center space-x-2">
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center space-x-2">
               {getConnectionIcon()}
               <span className="text-white text-xs font-medium">
                 {getConnectionText()}
@@ -483,90 +497,20 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
             </div>
             
             {isStreaming && (
-              <div className="bg-red-500/90 backdrop-blur-sm rounded-full w-3 h-3 animate-pulse" />
+              <div className="bg-red-500/80 backdrop-blur-sm rounded-full w-3 h-3 animate-pulse" />
             )}
           </div>
 
-          {/* Quality Metrics - Top Right */}
-          {(qualityScore !== null || antispoofingScore !== null || faceConfidence !== null) && (
+          {/* Quality Metrics - Top Right (minimal) */}
+          {(qualityScore !== null && qualityScore > 0) && (
             <div className="absolute top-4 right-4">
-              <div className="bg-black/70 backdrop-blur-sm rounded-xl px-3 py-2 space-y-1">
-                {qualityScore !== null && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-300">Quality</span>
-                    <span className={`font-bold ${qualityScore >= 25 ? 'text-green-400' : qualityScore >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
-                      {qualityScore.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-                
-                {antispoofingScore !== null && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-300">Liveness</span>
-                    <span className={`font-bold ${antispoofingScore >= 0.4 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(antispoofingScore * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-                
-                {faceConfidence !== null && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-300">Detection</span>
-                    <span className={`font-bold ${faceConfidence >= 0.5 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(faceConfidence * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                )}
+              <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1">
+                <span className={`text-xs font-bold ${qualityScore >= 25 ? 'text-green-400' : qualityScore >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  Q: {qualityScore.toFixed(0)}%
+                </span>
               </div>
             </div>
           )}
-
-          {/* Center Status Display */}
-          <div className="absolute bottom-6 left-6 right-6">
-            <div className="bg-black/80 backdrop-blur-md rounded-xl px-6 py-4 border border-white/10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <Shield className="text-blue-400" size={20} />
-                  <span className="text-white font-medium">Face Registration</span>
-                </div>
-                
-                {requiredFrames > 0 && (
-                  <div className="text-right">
-                    <div className="text-xs text-gray-300">Progress</div>
-                    <div className="text-sm font-bold text-white">
-                      {framesCollected}/{requiredFrames}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <p className="text-gray-200 text-sm leading-relaxed">{status}</p>
-              
-              {/* Progress Bar */}
-              {requiredFrames > 0 && (
-                <div className="mt-3">
-                  <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="h-2 bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
-                      style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>Frames: {framesSent} sent, {frameCount} total</span>
-                    <span>{Math.round((framesCollected / requiredFrames) * 100)}%</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Performance Metrics */}
-              {(processingTime !== null || networkLatency !== null) && (
-                <div className="mt-2 text-xs text-gray-400">
-                  {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
-                  {networkLatency !== null && <span>Network: {networkLatency}ms</span>}
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Success Overlay */}
           {success && (
@@ -579,9 +523,91 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
         </div>
       </div>
 
-      {/* Professional Controls */}
-      <div className="space-y-4 w-full max-w-2xl">
-        {/* Main Controls */}
+      {/* STATUS INFORMATION - MOVED OUTSIDE WEBCAM */}
+      <div className="w-full max-w-2xl space-y-4">
+        {/* Main Status Card */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <Shield className="text-blue-600" size={24} />
+              <div>
+                <h3 className="font-semibold text-gray-900">Face Registration Status</h3>
+                <p className="text-sm text-gray-600">Real-time streaming system</p>
+              </div>
+            </div>
+            
+            {requiredFrames > 0 && (
+              <div className="text-right">
+                <div className="text-sm text-gray-600">Progress</div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {framesCollected}/{requiredFrames}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="space-y-3">
+            <p className="text-gray-800">{status}</p>
+            
+            {/* Progress Bar */}
+            {requiredFrames > 0 && (
+              <div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="h-3 bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Frames sent: {framesSent}</span>
+                  <span>{Math.round((framesCollected / requiredFrames) * 100)}% complete</span>
+                </div>
+              </div>
+            )}
+
+            {/* Quality Metrics */}
+            {(qualityScore !== null || antispoofingScore !== null || faceConfidence !== null) && (
+              <div className="grid grid-cols-3 gap-4 pt-3 border-t border-gray-200">
+                {qualityScore !== null && (
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${qualityScore >= 25 ? 'text-green-600' : qualityScore >= 15 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      {formatPercentage(qualityScore, 1)}
+                    </div>
+                    <div className="text-xs text-gray-600">Quality</div>
+                  </div>
+                )}
+                
+                {antispoofingScore !== null && (
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${antispoofingScore >= 0.4 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatPercentage(antispoofingScore, 1)}
+                    </div>
+                    <div className="text-xs text-gray-600">Liveness</div>
+                  </div>
+                )}
+                
+                {faceConfidence !== null && (
+                  <div className="text-center">
+                    <div className={`text-lg font-bold ${faceConfidence >= 0.5 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatPercentage(faceConfidence, 1)}
+                    </div>
+                    <div className="text-xs text-gray-600">Detection</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Performance Info */}
+            {(processingTime !== null || networkLatency !== null) && (
+              <div className="flex justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                {processingTime !== null && <span>Processing: {processingTime.toFixed(0)}ms</span>}
+                {networkLatency !== null && <span>Network: {networkLatency}ms</span>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Professional Controls */}
         <div className="flex justify-center space-x-4">
           {!isStreaming && !success && (
             <button
@@ -707,17 +733,18 @@ const RealTimeFaceRegistration: React.FC<RealTimeFaceRegistrationProps> = ({
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm text-green-700">
             <div className="space-y-2">
-              <p><strong>User:</strong> {sessionData.user_name}</p>
-              <p><strong>Face ID:</strong> {sessionData.face_id}</p>
-              <p><strong>Quality Score:</strong> {sessionData.quality_score?.toFixed(1)}%</p>
+              <p><strong>User:</strong> {sessionData.user_name || 'Unknown'}</p>
+              <p><strong>Face ID:</strong> {sessionData.face_id || 'Generated'}</p>
+              <p><strong>Quality Score:</strong> {formatPercentage(sessionData.quality_score, 1)}</p>
               <p><strong>Model:</strong> {sessionData.model_name || 'ArcFace'}</p>
             </div>
             <div className="space-y-2">
-              <p><strong>Anti-spoofing:</strong> {(sessionData.antispoofing_score * 100)?.toFixed(1)}%</p>
-              <p><strong>Frames Processed:</strong> {sessionData.frames_processed}</p>
+              <p><strong>Anti-spoofing:</strong> {formatPercentage(sessionData.antispoofing_score, 1)}</p>
+              <p><strong>Face Confidence:</strong> {formatPercentage(sessionData.face_confidence, 1)}</p>
+              <p><strong>Frames Processed:</strong> {sessionData.frames_processed || 0}</p>
               <p><strong>Source:</strong> {sessionData.registration_source || 'stream_v2'}</p>
-              {sessionData.avg_processing_time && (
-                <p><strong>Avg Time:</strong> {sessionData.avg_processing_time.toFixed(0)}ms</p>
+              {sessionData.avg_processing_time && formatNumber(sessionData.avg_processing_time, 1, 0) !== 'N/A' && (
+                <p><strong>Avg Time:</strong> {formatNumber(sessionData.avg_processing_time, 1, 0)}ms</p>
               )}
             </div>
           </div>

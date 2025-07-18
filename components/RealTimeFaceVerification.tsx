@@ -1,4 +1,4 @@
-// components/RealTimeFaceVerification.tsx - Professional Version
+// components/RealTimeFaceVerification.tsx - Fixed with status outside webcam
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
@@ -21,6 +21,23 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
   onError, 
   className = "" 
 }) => {
+  // Utility function to safely format numbers and percentages
+  const formatNumber = (value: any, multiplier: number = 1, decimals: number = 1): string => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return 'N/A'
+    }
+    const numericValue = typeof value === 'string' ? parseFloat(value) : value
+    if (isNaN(numericValue)) {
+      return 'N/A'
+    }
+    return (numericValue * multiplier).toFixed(decimals)
+  }
+
+  // Utility function to format percentage values
+  const formatPercentage = (value: any, decimals: number = 1): string => {
+    const formatted = formatNumber(value, 100, decimals)
+    return formatted === 'N/A' ? 'N/A' : formatted + '%'
+  }
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -501,14 +518,14 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
   const getMatchIndicator = () => {
     if (isMatch === null) return null
     return isMatch ? (
-      <div className="flex items-center space-x-1 text-green-400">
-        <CheckCircle size={12} />
-        <span>MATCH</span>
+      <div className="flex items-center space-x-1 text-green-600">
+        <CheckCircle size={16} />
+        <span className="font-medium">MATCH</span>
       </div>
     ) : (
-      <div className="flex items-center space-x-1 text-red-400">
-        <AlertCircle size={12} />
-        <span>NO MATCH</span>
+      <div className="flex items-center space-x-1 text-red-600">
+        <AlertCircle size={16} />
+        <span className="font-medium">NO MATCH</span>
       </div>
     )
   }
@@ -525,14 +542,14 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
 
   return (
     <div className={`flex flex-col items-center space-y-6 ${className}`}>
-      {/* Professional Video Container */}
+      {/* Professional Video Container - CLEAN VIEW */}
       <div className="relative w-full max-w-2xl mx-auto">
         <div 
           className={`relative rounded-2xl overflow-hidden transition-all duration-300 border-2 ${getStatusColor()}`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Video Element */}
+          {/* Video Element - Clean without overlays */}
           <video
             ref={videoRef}
             autoPlay
@@ -541,12 +558,9 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
             className="w-full h-[400px] object-cover bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900"
           />
           
-          {/* Professional Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none" />
-          
-          {/* Corner Status Indicators */}
+          {/* Minimal Status Indicators - Top Only */}
           <div className="absolute top-4 left-4 flex items-center space-x-2">
-            <div className="bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center space-x-2">
+            <div className="bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center space-x-2">
               {getConnectionIcon()}
               <span className="text-white text-xs font-medium">
                 {getConnectionText()}
@@ -554,95 +568,31 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
             </div>
             
             {isStreaming && (
-              <div className="bg-purple-500/90 backdrop-blur-sm rounded-full w-3 h-3 animate-pulse" />
+              <div className="bg-purple-500/80 backdrop-blur-sm rounded-full w-3 h-3 animate-pulse" />
             )}
           </div>
 
-          {/* Similarity Score - Top Center */}
+          {/* Similarity Score - Top Center (minimal) */}
           {similarityScore !== null && (
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
-              <div className="bg-black/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/20">
-                <div className="text-center">
-                  <div className={`text-2xl font-bold ${similarityScore >= SIMILARITY_THRESHOLD ? 'text-green-400' : 'text-red-400'}`}>
-                    {similarityScore.toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-gray-300">Similarity</div>
-                  {getMatchIndicator()}
-                </div>
+              <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1">
+                <span className={`text-sm font-bold ${similarityScore >= SIMILARITY_THRESHOLD ? 'text-green-400' : 'text-red-400'}`}>
+                  {formatNumber(similarityScore, 1, 1) === 'N/A' ? 'N/A' : formatNumber(similarityScore, 1, 1) + '%'}
+                </span>
               </div>
             </div>
           )}
 
-          {/* Quality Metrics - Top Right */}
-          {(qualityScore !== null || antispoofingScore !== null) && (
+          {/* Quality Score - Top Right (minimal) */}
+          {(qualityScore !== null && qualityScore > 0) && (
             <div className="absolute top-4 right-4">
-              <div className="bg-black/70 backdrop-blur-sm rounded-xl px-3 py-2 space-y-1">
-                {qualityScore !== null && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-300">Quality</span>
-                    <span className={`font-bold ${qualityScore >= 10 ? 'text-green-400' : qualityScore >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
-                      {qualityScore.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-                
-                {antispoofingScore !== null && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-300">Liveness</span>
-                    <span className={`font-bold ${antispoofingScore >= 0.2 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(antispoofingScore * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                )}
+              <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1">
+                <span className={`text-xs font-bold ${qualityScore >= 10 ? 'text-green-400' : qualityScore >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  Q: {formatNumber(qualityScore, 1, 0) === 'N/A' ? 'N/A' : formatNumber(qualityScore, 1, 0) + '%'}
+                </span>
               </div>
             </div>
           )}
-
-          {/* Center Status Display */}
-          <div className="absolute bottom-6 left-6 right-6">
-            <div className="bg-black/80 backdrop-blur-md rounded-xl px-6 py-4 border border-white/10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <Eye className="text-purple-400" size={20} />
-                  <span className="text-white font-medium">Identity Verification</span>
-                </div>
-                
-                <div className="text-right">
-                  <div className="text-xs text-gray-300">Progress</div>
-                  <div className="text-sm font-bold text-white">
-                    {framesCollected}/{requiredFrames}
-                  </div>
-                </div>
-              </div>
-              
-              <p className="text-gray-200 text-sm leading-relaxed">{status}</p>
-              
-              {/* Progress Bar */}
-              {requiredFrames > 0 && (
-                <div className="mt-3">
-                  <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="h-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500 ease-out"
-                      style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>Attempts remaining: {attemptsRemaining}</span>
-                    <span>{Math.round((framesCollected / requiredFrames) * 100)}%</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Performance Metrics */}
-              {(processingTime !== null || comparisonTime !== null) && (
-                <div className="mt-2 text-xs text-gray-400">
-                  {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
-                  {comparisonTime !== null && <span>Compare: {comparisonTime.toFixed(0)}ms </span>}
-                  {networkLatency !== null && <span>Network: {networkLatency}ms</span>}
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Success/Failure Overlay */}
           {success && verificationResult && (
@@ -687,9 +637,122 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
         </div>
       )}
 
-      {/* Professional Controls */}
-      <div className="space-y-4 w-full max-w-2xl">
-        {/* Main Controls */}
+      {/* STATUS INFORMATION - MOVED OUTSIDE WEBCAM */}
+      <div className="w-full max-w-2xl space-y-4">
+        {/* Main Status Card */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <Eye className="text-purple-600" size={24} />
+              <div>
+                <h3 className="font-semibold text-gray-900">Identity Verification Status</h3>
+                <p className="text-sm text-gray-600">Real-time face verification system</p>
+              </div>
+            </div>
+            
+            <div className="text-right">
+              <div className="text-sm text-gray-600">Progress</div>
+              <div className="text-2xl font-bold text-purple-600">
+                {framesCollected}/{requiredFrames}
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <p className="text-gray-800">{status}</p>
+            
+            {/* Progress Bar */}
+            {requiredFrames > 0 && (
+              <div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="h-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Attempts remaining: {attemptsRemaining}</span>
+                  <span>{Math.round((framesCollected / requiredFrames) * 100)}% complete</span>
+                </div>
+              </div>
+            )}
+
+            {/* Similarity & Quality Metrics */}
+            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200">
+              {/* Left Column - Similarity */}
+              <div className="space-y-3">
+                {similarityScore !== null && (
+                  <div className="text-center">
+                    <div className={`text-3xl font-bold ${similarityScore >= SIMILARITY_THRESHOLD ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatNumber(similarityScore, 1, 1) === 'N/A' ? 'N/A' : formatNumber(similarityScore, 1, 1) + '%'}
+                    </div>
+                    <div className="text-sm text-gray-600 mb-1">Current Similarity</div>
+                    {getMatchIndicator()}
+                  </div>
+                )}
+                
+                {maxSimilarity !== null && maxSimilarity !== similarityScore && (
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-600">
+                      {formatNumber(maxSimilarity, 1, 1) === 'N/A' ? 'N/A' : formatNumber(maxSimilarity, 1, 1) + '%'}
+                    </div>
+                    <div className="text-xs text-gray-600">Best Match</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Quality Metrics */}
+              <div className="space-y-2">
+                {qualityScore !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Quality:</span>
+                    <span className={`text-sm font-bold ${qualityScore >= 10 ? 'text-green-600' : qualityScore >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      {formatNumber(qualityScore, 1, 1) === 'N/A' ? 'N/A' : formatNumber(qualityScore, 1, 1) + '%'}
+                    </span>
+                  </div>
+                )}
+                
+                {antispoofingScore !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Liveness:</span>
+                    <span className={`text-sm font-bold ${antispoofingScore >= 0.2 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatPercentage(antispoofingScore, 1)}
+                    </span>
+                  </div>
+                )}
+                
+                {matchRatio !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Match Ratio:</span>
+                    <span className="text-sm font-bold text-blue-600">
+                      {formatPercentage(matchRatio, 1)}
+                    </span>
+                  </div>
+                )}
+                
+                {confidenceScore !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Confidence:</span>
+                    <span className="text-sm font-bold text-purple-600">
+                      {formatPercentage(confidenceScore, 1)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Performance Info */}
+            {(processingTime !== null || comparisonTime !== null || networkLatency !== null) && (
+              <div className="flex justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms</span>}
+                {comparisonTime !== null && <span>Compare: {comparisonTime.toFixed(0)}ms</span>}
+                {networkLatency !== null && <span>Network: {networkLatency}ms</span>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Professional Controls */}
         <div className="flex justify-center space-x-4">
           {!isStreaming && !success && (
             <button
@@ -761,13 +824,13 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">
-                  {similarityScore ? `${similarityScore.toFixed(0)}%` : '0%'}
+                  {formatNumber(similarityScore, 1, 0) === 'N/A' ? '0%' : formatNumber(similarityScore, 1, 0) + '%'}
                 </div>
-                <div className="text-xs text-gray-600">Max Similarity</div>
+                <div className="text-xs text-gray-600">Similarity</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
-                  {processingTime ? `${processingTime.toFixed(0)}ms` : '0ms'}
+                  {formatNumber(processingTime, 1, 0) === 'N/A' ? '0ms' : formatNumber(processingTime, 1, 0) + 'ms'}
                 </div>
                 <div className="text-xs text-gray-600">Processing Time</div>
               </div>
@@ -813,20 +876,20 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
           
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className={`space-y-2 ${verificationResult.verified ? 'text-green-700' : 'text-red-700'}`}>
-              <p><strong>User:</strong> {verificationResult.user_name}</p>
-              <p><strong>Similarity:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
+              <p><strong>User:</strong> {verificationResult.user_name || 'Unknown'}</p>
+              <p><strong>Similarity:</strong> {formatNumber(verificationResult.similarity_score, 1, 1) === 'N/A' ? 'N/A' : formatNumber(verificationResult.similarity_score, 1, 1) + '%'}</p>
               {verificationResult.max_similarity_score && (
-                <p><strong>Best Match:</strong> {verificationResult.max_similarity_score?.toFixed(1)}%</p>
+                <p><strong>Best Match:</strong> {formatNumber(verificationResult.max_similarity_score, 1, 1) === 'N/A' ? 'N/A' : formatNumber(verificationResult.max_similarity_score, 1, 1) + '%'}</p>
               )}
-              <p><strong>Quality:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
+              <p><strong>Quality:</strong> {formatNumber(verificationResult.quality_score, 1, 1) === 'N/A' ? 'N/A' : formatNumber(verificationResult.quality_score, 1, 1) + '%'}</p>
             </div>
             <div className={`space-y-2 ${verificationResult.verified ? 'text-green-700' : 'text-red-700'}`}>
-              <p><strong>Anti-spoofing:</strong> {(verificationResult.antispoofing_score * 100)?.toFixed(1)}%</p>
+              <p><strong>Anti-spoofing:</strong> {formatPercentage(verificationResult.antispoofing_score, 1)}</p>
               {verificationResult.match_ratio !== undefined && (
-                <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
+                <p><strong>Match Ratio:</strong> {formatPercentage(verificationResult.match_ratio, 1)}</p>
               )}
-              <p><strong>Frames:</strong> {verificationResult.frames_processed}</p>
-              <p><strong>Threshold:</strong> {verificationResult.threshold_used || SIMILARITY_THRESHOLD}%</p>
+              <p><strong>Frames:</strong> {verificationResult.frames_processed || 0}</p>
+              <p><strong>Threshold:</strong> {formatNumber(verificationResult.threshold_used || SIMILARITY_THRESHOLD, 1, 0) === 'N/A' ? 'N/A' : formatNumber(verificationResult.threshold_used || SIMILARITY_THRESHOLD, 1, 0) + '%'}</p>
             </div>
           </div>
           
