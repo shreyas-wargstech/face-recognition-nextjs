@@ -1,10 +1,10 @@
-// components/RealTimeFaceVerification.tsx - Perfectly aligned with backend
+// OptimizedFaceVerification.tsx - Instant Single-Frame Verification
 'use client'
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
-import { Shield, CheckCircle, AlertCircle, StopCircle, PlayCircle, Eye, UserCheck, Wifi, WifiOff, Loader, RotateCcw } from 'lucide-react'
+import { Shield, CheckCircle, AlertCircle, Zap, StopCircle, PlayCircle, Eye, UserCheck, Wifi, WifiOff, Loader, RotateCcw, Clock } from 'lucide-react'
 
-interface RealTimeFaceVerificationProps {
+interface OptimizedFaceVerificationProps {
   userId: number
   quizId?: string
   courseId?: string
@@ -13,7 +13,7 @@ interface RealTimeFaceVerificationProps {
   className?: string
 }
 
-const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({ 
+const OptimizedFaceVerification: React.FC<OptimizedFaceVerificationProps> = ({ 
   userId, 
   quizId, 
   courseId, 
@@ -26,48 +26,32 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
   const wsRef = useRef<WebSocket | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const frameCountRef = useRef(0)
 
   const [isStreaming, setIsStreaming] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
-  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected' | 'reconnecting'>('disconnected')
-  const [status, setStatus] = useState<string>('Ready to start verification')
-  const [framesCollected, setFramesCollected] = useState(0)
-  const [framesSent, setFramesSent] = useState(0)
-  const [requiredFrames, setRequiredFrames] = useState(2)
-  const [qualityScore, setQualityScore] = useState<number | null>(null)
+  const [connectionState, setConnectionState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected')
+  const [status, setStatus] = useState<string>('Ready for instant verification')
   const [similarityScore, setSimilarityScore] = useState<number | null>(null)
-  const [antispoofingScore, setAntispoofingScore] = useState<number | null>(null)
+  const [qualityScore, setQualityScore] = useState<number | null>(null)
   const [isMatch, setIsMatch] = useState<boolean | null>(null)
   const [processingTime, setProcessingTime] = useState<number | null>(null)
   const [comparisonTime, setComparisonTime] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [verificationResult, setVerificationResult] = useState<any>(null)
-  const [retryCount, setRetryCount] = useState(0)
-  const [attemptsRemaining, setAttemptsRemaining] = useState(5)
-  const [networkLatency, setNetworkLatency] = useState<number | null>(null)
-  const [canRetry, setCanRetry] = useState(true)
-  const [frameCount, setFrameCount] = useState(0)
-  const [processedCount, setProcessedCount] = useState(0)
-  const [maxSimilarity, setMaxSimilarity] = useState<number | null>(null)
-  const [matchRatio, setMatchRatio] = useState<number | null>(null)
-  const [confidenceScore, setConfidenceScore] = useState<number | null>(null)
+  const [framesSent, setFramesSent] = useState(0)
+  const [totalSessionTime, setTotalSessionTime] = useState<number | null>(null)
 
-  // Backend-aligned settings from main.py verification endpoint
-  const MAX_RETRIES = 3
-  const RECONNECT_DELAY = 2000  // Faster for verification
-  const FRAME_CAPTURE_INTERVAL = 800  // Faster for verification - every 8th frame processed
-  const FRAME_QUALITY = 0.7  // Better quality for verification
-  const MAX_FRAME_SIZE = { width: 480, height: 360 }
-  const HEARTBEAT_INTERVAL = 15000  // 15 seconds
-  const CONNECTION_TIMEOUT = 10000  // 10 seconds - faster for verification
-  const SIMILARITY_THRESHOLD = 55.0  // Relaxed threshold from backend
-  const MAX_VERIFICATION_ATTEMPTS = 5  // Matches backend
+  // Ultra-fast verification settings
+  const FRAME_CAPTURE_INTERVAL = 200  // 200ms - very fast capture
+  const FRAME_QUALITY = 0.3           // Lower quality for speed
+  const MAX_FRAME_SIZE = { width: 240, height: 180 }  // Very small for speed
+  const CONNECTION_TIMEOUT = 5000      // Fast timeout
+  const SIMILARITY_THRESHOLD = 50.0    // Relaxed threshold
 
   const buildWebSocketUrl = useCallback(() => {
-    const baseUrl = `ws://localhost:8000/ws/face-verification/${userId}`
+    const baseUrl = `ws://localhost:8000/ws/face-verification-fast/${userId}`
     const params = new URLSearchParams()
     
     if (quizId) params.append('quiz_id', quizId)
@@ -76,118 +60,34 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
     return params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl
   }, [userId, quizId, courseId])
 
-  const startHeartbeat = useCallback(() => {
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current)
-    }
-
-    heartbeatRef.current = setInterval(() => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        const pingStart = Date.now()
-        wsRef.current.send(JSON.stringify({ 
-          type: 'ping', 
-          timestamp: pingStart 
-        }))
-      }
-    }, HEARTBEAT_INTERVAL)
-  }, [])
-
-  const stopHeartbeat = useCallback(() => {
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current)
-      heartbeatRef.current = null
-    }
-  }, [])
-
   const startVideoStream = useCallback(async () => {
-    // Try multiple constraint sets, starting with ideal and falling back to simpler ones
-    const constraintSets = [
-      // Ideal constraints for verification
-      {
+    try {
+      // Ultra-fast camera constraints
+      const constraints = {
         video: {
-          width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
-          height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
-          frameRate: { ideal: 20, max: 30 },
+          width: { ideal: MAX_FRAME_SIZE.width, max: 320 },
+          height: { ideal: MAX_FRAME_SIZE.height, max: 240 },
+          frameRate: { ideal: 30, max: 30 },
           facingMode: 'user'
         },
-        audio: false
-      },
-      // Fallback without frameRate max constraint
-      {
-        video: {
-          width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
-          height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
-          frameRate: { ideal: 20 },
-          facingMode: 'user'
-        },
-        audio: false
-      },
-      // Fallback without frameRate constraint at all
-      {
-        video: {
-          width: { ideal: MAX_FRAME_SIZE.width, max: 640 },
-          height: { ideal: MAX_FRAME_SIZE.height, max: 480 },
-          facingMode: 'user'
-        },
-        audio: false
-      },
-      // Minimal constraints - just front camera
-      {
-        video: {
-          facingMode: 'user'
-        },
-        audio: false
-      },
-      // Last resort - any video
-      {
-        video: true,
         audio: false
       }
-    ]
 
-    for (let i = 0; i < constraintSets.length; i++) {
-      try {
-        console.log(`Trying verification camera constraints set ${i + 1}/${constraintSets.length}`)
-        const stream = await navigator.mediaDevices.getUserMedia(constraintSets[i])
-        streamRef.current = stream
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-        }
-
-        console.log('✅ Verification camera stream started successfully')
-        return true
-      } catch (error) {
-        console.warn(`Verification camera constraints set ${i + 1} failed:`, error)
-        
-        // If this is the last constraint set, show the error
-        if (i === constraintSets.length - 1) {
-          console.error('All verification camera constraint sets failed:', error)
-          
-          // Provide specific error messages based on error type
-          let errorMessage = 'Failed to access camera.'
-          if (error.name === 'NotAllowedError') {
-            errorMessage = 'Camera access denied. Please allow camera permissions and refresh the page.'
-          } else if (error.name === 'NotFoundError') {
-            errorMessage = 'No camera found. Please connect a camera and try again.'
-          } else if (error.name === 'OverconstrainedError') {
-            errorMessage = 'Camera does not support required settings. Using basic camera access.'
-          } else if (error.name === 'NotReadableError') {
-            errorMessage = 'Camera is already in use by another application.'
-          }
-          
-          setError(errorMessage)
-          if (onError) {
-            onError(errorMessage)
-          }
-          return false
-        }
-        // Continue to next constraint set
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      streamRef.current = stream
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
       }
+
+      console.log('✅ Ultra-fast verification camera started')
+      return true
+    } catch (error) {
+      console.error('Camera error:', error)
+      setError('Camera access failed')
+      return false
     }
-    
-    return false
-  }, [onError])
+  }, [])
 
   const connectWebSocket = useCallback(async () => {
     if (wsRef.current) {
@@ -214,127 +114,67 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
         clearTimeout(connectionTimeout)
         setIsConnected(true)
         setConnectionState('connected')
-        setStatus('Connected. Initializing verification...')
-        setRetryCount(0)
-        startHeartbeat()
-        console.log('🔗 WebSocket connected for face verification')
+        setStatus('Connected to instant verification service')
+        console.log('⚡ Ultra-fast verification WebSocket connected')
       }
 
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          console.log('📨 Received verification message:', message.type)
-
-          // Handle all message types exactly as implemented in backend
+          
           switch (message.type) {
             case 'connected':
-              setRequiredFrames(message.required_frames || 2)
-              setStatus(`Verification ready. Please look at the camera. Need ${message.required_frames || 2} frames.`)
+              setStatus('Ready for single-frame verification')
               setIsStreaming(true)
               startFrameCapture()
               break
 
             case 'frame_processed':
               if (message.success) {
-                setFramesCollected(message.frames_collected)
-                setQualityScore(message.quality_score)
-                setAntispoofingScore(message.antispoofing_score)
                 setSimilarityScore(message.similarity_score)
                 setIsMatch(message.is_match)
+                setQualityScore(message.quality_score)
                 setProcessingTime(message.processing_time)
                 setComparisonTime(message.comparison_time)
                 setStatus(message.message)
                 setError(null)
-                
-                // Track maximum similarity for better UX
-                if (message.similarity_score && (maxSimilarity === null || message.similarity_score > maxSimilarity)) {
-                  setMaxSimilarity(message.similarity_score)
-                }
               } else {
                 setStatus(message.message)
-                setProcessingTime(message.processing_time)
-                setAttemptsRemaining(message.attempts_remaining || 0)
               }
-              setProcessedCount(prev => prev + 1)
-              break
-
-            case 'spoofing_detected':
-              setError(message.message)
-              setStatus('⚠️ Please use your real face for verification')
-              setAntispoofingScore(message.antispoofing_score)
-              setCanRetry(message.can_retry !== false)
               break
 
             case 'verification_complete':
               setSuccess(true)
               setVerificationResult(message)
-              setStatus(message.verified ? '✅ Identity verified successfully!' : '❌ Identity verification failed')
-              
-              // Store all verification metrics from backend
-              setSimilarityScore(message.similarity_score)
-              setMaxSimilarity(message.max_similarity_score)
-              setQualityScore(message.quality_score)
-              setAntispoofingScore(message.antispoofing_score)
-              setMatchRatio(message.match_ratio)
-              setConfidenceScore(message.confidence_score)
-              
+              setTotalSessionTime(message.total_session_time)
+              setStatus(message.message)
               stopStreaming()
               if (onSuccess) {
                 onSuccess(message)
               }
               break
 
-            case 'verification_restarted':
-              // Reset verification state when backend restarts
-              setFramesCollected(0)
-              setFramesSent(0)
-              setFrameCount(0)
-              setProcessedCount(0)
-              setQualityScore(null)
-              setSimilarityScore(null)
-              setAntispoofingScore(null)
-              setIsMatch(null)
-              setMaxSimilarity(null)
-              setMatchRatio(null)
-              setConfidenceScore(null)
-              setError(null)
-              setStatus(message.message)
-              break
-
             case 'error':
               setError(message.message)
               setStatus(`❌ Error: ${message.message}`)
-              setCanRetry(message.can_retry !== false)
               if (onError) {
                 onError(message.message)
               }
               break
 
             case 'pong':
-              if (message.timestamp) {
-                const latency = Date.now() - message.timestamp
-                setNetworkLatency(latency)
-              }
+              // Handle heartbeat response
               break
-
-            case 'timeout_warning':
-              setError(message.message)
-              setStatus('⚠️ Connection issue detected')
-              setCanRetry(message.can_retry !== false)
-              break
-
-            default:
-              console.log('Unknown verification message type:', message.type)
           }
         } catch (error) {
-          console.error('Error parsing verification WebSocket message:', error)
+          console.error('Error parsing verification message:', error)
         }
       }
 
       ws.onerror = (error) => {
         console.error('❌ Verification WebSocket error:', error)
         clearTimeout(connectionTimeout)
-        setError('Connection error occurred')
+        setError('Connection error')
         setConnectionState('disconnected')
       }
 
@@ -342,45 +182,24 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
         clearTimeout(connectionTimeout)
         setIsConnected(false)
         setIsStreaming(false)
-        stopHeartbeat()
+        setConnectionState('disconnected')
+        console.log('❌ Verification WebSocket closed:', event.code)
         
-        console.log('❌ Verification WebSocket closed:', event.code, event.reason)
-        
-        // Handle specific close codes from backend
-        if (event.code === 4004) {
-          setError('User not found')
-          setStatus('❌ User not found')
-          setConnectionState('disconnected')
-        } else if (event.code === 4003) {
-          setError('No face registration found. Please register your face first.')
-          setStatus('❌ Face not registered')
-          setConnectionState('disconnected')
-        } else if (!success && retryCount < MAX_RETRIES) {
-          // Auto-reconnect logic
-          setConnectionState('reconnecting')
-          setStatus(`Connection lost. Reconnecting... (${retryCount + 1}/${MAX_RETRIES})`)
-          
-          reconnectTimeoutRef.current = setTimeout(() => {
-            setRetryCount(prev => prev + 1)
-            connectWebSocket()
-          }, RECONNECT_DELAY)
-        } else {
-          setConnectionState('disconnected')
-          if (!success) {
-            setStatus('Connection failed. Please try again.')
-          }
+        if (event.code === 4003) {
+          setError('No face registration found. Please register first.')
         }
       }
 
     } catch (error) {
-      console.error('WebSocket creation error:', error)
+      console.error('Verification WebSocket creation error:', error)
       setError('Failed to create connection')
       setConnectionState('disconnected')
     }
-  }, [buildWebSocketUrl, success, retryCount, onSuccess, onError, startHeartbeat, stopHeartbeat, maxSimilarity])
+  }, [buildWebSocketUrl, onSuccess, onError])
 
   const startFrameCapture = useCallback(() => {
     if (!intervalRef.current) {
+      frameCountRef.current = 0
       intervalRef.current = setInterval(() => {
         captureAndSendFrame()
       }, FRAME_CAPTURE_INTERVAL)
@@ -401,25 +220,35 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
     }
 
     try {
+      // Ultra-small processing for speed
       canvas.width = MAX_FRAME_SIZE.width
       canvas.height = MAX_FRAME_SIZE.height
 
+      // Fast draw
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Very low quality for maximum speed
       const frameData = canvas.toDataURL('image/jpeg', FRAME_QUALITY)
 
-      // Send frame with exact format expected by backend
+      // Send frame for instant processing
       wsRef.current.send(JSON.stringify({
         type: 'frame',
         frame: frameData,
         timestamp: Date.now()
       }))
 
+      frameCountRef.current += 1
       setFramesSent(prev => prev + 1)
-      setFrameCount(prev => prev + 1)
+
+      // Stop after successful verification (single frame mode)
+      if (success) {
+        stopStreaming()
+      }
+
     } catch (error) {
-      console.error('Error capturing/sending verification frame:', error)
+      console.error('Error capturing verification frame:', error)
     }
-  }, [])
+  }, [success])
 
   const stopStreaming = useCallback(() => {
     if (intervalRef.current) {
@@ -427,17 +256,10 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
       intervalRef.current = null
     }
 
-    stopHeartbeat()
-
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current)
-      reconnectTimeoutRef.current = null
-    }
-
     if (wsRef.current) {
       try {
         wsRef.current.send(JSON.stringify({ type: 'stop' }))
-        wsRef.current.close(1000, 'User stopped')
+        wsRef.current.close()
       } catch (error) {
         console.error('Error closing verification WebSocket:', error)
       }
@@ -452,7 +274,7 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
     setIsStreaming(false)
     setIsConnected(false)
     setConnectionState('disconnected')
-  }, [stopHeartbeat])
+  }, [])
 
   const handleStart = useCallback(async () => {
     const videoStarted = await startVideoStream()
@@ -467,37 +289,20 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
   }, [stopStreaming])
 
   const handleRestart = useCallback(() => {
-    // Send restart signal to backend
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'restart_verification' }))
-    }
-    
-    // Reset local state
     setSuccess(false)
     setError(null)
-    setFramesCollected(0)
-    setFramesSent(0)
-    setFrameCount(0)
-    setProcessedCount(0)
-    setQualityScore(null)
     setSimilarityScore(null)
-    setAntispoofingScore(null)
+    setQualityScore(null)
     setIsMatch(null)
     setProcessingTime(null)
     setComparisonTime(null)
     setVerificationResult(null)
-    setAttemptsRemaining(5)
-    setRetryCount(0)
-    setNetworkLatency(null)
-    setCanRetry(true)
-    setMaxSimilarity(null)
-    setMatchRatio(null)
-    setConfidenceScore(null)
-    
-    if (!isConnected) {
-      handleStart()
-    }
-  }, [isConnected, handleStart])
+    setFramesSent(0)
+    setTotalSessionTime(null)
+    frameCountRef.current = 0
+    setStatus('Ready for instant verification')
+    handleStart()
+  }, [handleStart])
 
   useEffect(() => {
     return () => {
@@ -510,7 +315,6 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
       case 'connected':
         return <Wifi size={16} className="text-green-500" />
       case 'connecting':
-      case 'reconnecting':
         return <Loader size={16} className="text-yellow-500 animate-spin" />
       default:
         return <WifiOff size={16} className="text-red-500" />
@@ -534,74 +338,56 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
 
   return (
     <div className={`flex flex-col items-center space-y-6 ${className}`}>
-      {/* Video Display */}
+      {/* Ultra-Fast Video Display */}
       <div className="relative">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="w-[480px] h-[360px] object-cover rounded-lg border-2 border-gray-300 bg-black"
+          className="w-[240px] h-[180px] object-cover rounded-lg border-2 border-gray-300 bg-black"
         />
         
-        {/* Verification Status Overlay */}
-        <div className="absolute top-4 left-4 right-4">
-          <div className="bg-black bg-opacity-70 text-white p-3 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Identity Verification</span>
-              <div className="flex items-center space-x-2">
+        {/* Instant Verification Status */}
+        <div className="absolute top-2 left-2 right-2">
+          <div className="bg-black bg-opacity-80 text-white p-2 rounded-lg">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium flex items-center">
+                <Zap size={12} className="mr-1 text-blue-400" />
+                Instant Verification
+              </span>
+              <div className="flex items-center space-x-1">
                 {getConnectionIcon()}
-                <span className="text-xs">
-                  {connectionState === 'connected' ? `Connected ${networkLatency ? `(${networkLatency}ms)` : ''}` :
-                   connectionState === 'connecting' ? 'Connecting...' :
-                   connectionState === 'reconnecting' ? `Reconnecting... (${retryCount}/${MAX_RETRIES})` :
-                   'Disconnected'}
-                </span>
+                <span className="text-xs">{connectionState}</span>
               </div>
             </div>
             
-            <p className="text-sm">{status}</p>
+            <p className="text-xs">{status}</p>
             
-            {/* Progress Bar - matches backend frame requirements */}
-            {requiredFrames > 0 && (
-              <div className="mt-2">
-                <div className="flex justify-between text-xs mb-1">
-                  <span>Progress ({framesCollected}/{requiredFrames})</span>
-                  <span>Attempts: {attemptsRemaining}</span>
-                </div>
-                <div className="w-full bg-gray-600 rounded-full h-2">
-                  <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, (framesCollected / requiredFrames) * 100)}%` }}
-                  ></div>
-                </div>
+            {/* Instant Processing Indicator */}
+            {isStreaming && !success && (
+              <div className="mt-1 flex items-center space-x-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                <span className="text-xs">Frames sent: {framesSent}</span>
               </div>
             )}
 
             {/* Performance Metrics */}
             {(processingTime !== null || comparisonTime !== null) && (
-              <div className="mt-2 text-xs text-gray-300">
+              <div className="mt-1 text-xs text-blue-300">
                 {processingTime !== null && <span>Process: {processingTime.toFixed(0)}ms </span>}
                 {comparisonTime !== null && <span>Compare: {comparisonTime.toFixed(0)}ms </span>}
-                {networkLatency !== null && <span>Latency: {networkLatency}ms</span>}
+                {totalSessionTime && <span>Total: {totalSessionTime.toFixed(0)}ms</span>}
               </div>
             )}
           </div>
         </div>
 
-        {/* Real-time Verification Indicators - matches backend thresholds */}
-        {(qualityScore !== null || similarityScore !== null || antispoofingScore !== null) && (
-          <div className="absolute bottom-4 left-4 right-4">
-            <div className="bg-black bg-opacity-70 text-white p-2 rounded-lg">
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {qualityScore !== null && (
-                  <div>
-                    <span className="block text-gray-300">Quality</span>
-                    <span className={`font-bold ${qualityScore >= 10 ? 'text-green-400' : qualityScore >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
-                      {qualityScore.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
+        {/* Real-time Verification Indicators */}
+        {(similarityScore !== null || qualityScore !== null) && (
+          <div className="absolute bottom-2 left-2 right-2">
+            <div className="bg-black bg-opacity-80 text-white p-2 rounded-lg">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 {similarityScore !== null && (
                   <div>
                     <span className="block text-gray-300">Similarity</span>
@@ -613,11 +399,11 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
                     </div>
                   </div>
                 )}
-                {antispoofingScore !== null && (
+                {qualityScore !== null && (
                   <div>
-                    <span className="block text-gray-300">Liveness</span>
-                    <span className={`font-bold ${antispoofingScore >= 0.2 ? 'text-green-400' : 'text-red-400'}`}>
-                      {(antispoofingScore * 100).toFixed(1)}%
+                    <span className="block text-gray-300">Quality</span>
+                    <span className="font-bold text-blue-400">
+                      {qualityScore.toFixed(1)}%
                     </span>
                   </div>
                 )}
@@ -629,27 +415,27 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
         {/* Success/Failure Overlay */}
         {success && verificationResult && (
           <div className={`absolute inset-0 ${verificationResult.verified ? 'bg-green-500' : 'bg-red-500'} bg-opacity-20 flex items-center justify-center rounded-lg`}>
-            <div className={`${verificationResult.verified ? 'bg-green-500' : 'bg-red-500'} text-white p-4 rounded-full`}>
-              {verificationResult.verified ? <CheckCircle size={48} /> : <AlertCircle size={48} />}
+            <div className={`${verificationResult.verified ? 'bg-green-500' : 'bg-red-500'} text-white p-3 rounded-full`}>
+              {verificationResult.verified ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
             </div>
           </div>
         )}
       </div>
 
-      {/* Controls */}
-      <div className="flex space-x-4">
+      {/* Ultra-Fast Controls */}
+      <div className="flex space-x-3">
         {!isStreaming && !success && (
           <button
             onClick={handleStart}
             disabled={connectionState === 'connecting'}
-            className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
           >
             {connectionState === 'connecting' ? (
-              <Loader size={20} className="animate-spin" />
+              <Loader size={16} className="animate-spin" />
             ) : (
-              <PlayCircle size={20} />
+              <Zap size={16} />
             )}
-            <span>Start Verification</span>
+            <span>Instant Verification</span>
           </button>
         )}
 
@@ -657,30 +443,28 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
           <div className="flex space-x-2">
             <button
               onClick={handleStop}
-              className="flex items-center space-x-2 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
             >
-              <StopCircle size={20} />
+              <StopCircle size={16} />
               <span>Stop</span>
             </button>
             
-            {canRetry && (
-              <button
-                onClick={handleRestart}
-                className="flex items-center space-x-2 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-              >
-                <RotateCcw size={20} />
-                <span>Retry</span>
-              </button>
-            )}
+            <button
+              onClick={handleRestart}
+              className="flex items-center space-x-2 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              <RotateCcw size={16} />
+              <span>Retry</span>
+            </button>
           </div>
         )}
 
         {success && (
           <button
             onClick={handleRestart}
-            className="flex items-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            <Eye size={20} />
+            <Eye size={16} />
             <span>Verify Again</span>
           </button>
         )}
@@ -688,92 +472,81 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
 
       {/* Context Information */}
       {(quizId || courseId) && (
-        <div className="w-full max-w-md bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="w-full max-w-sm bg-gray-50 border border-gray-200 rounded-lg p-3">
           <div className="flex items-center space-x-2 mb-2">
-            <UserCheck size={20} className="text-gray-600" />
-            <p className="font-medium text-gray-800">Verification Context</p>
+            <UserCheck size={16} className="text-gray-600" />
+            <p className="font-medium text-gray-800 text-sm">Verification Context</p>
           </div>
-          <div className="text-sm text-gray-600 space-y-1">
+          <div className="text-xs text-gray-600 space-y-1">
             {courseId && <p><strong>Course:</strong> {courseId}</p>}
             {quizId && <p><strong>Quiz:</strong> {quizId}</p>}
-            <p><strong>Threshold:</strong> {SIMILARITY_THRESHOLD}% similarity (relaxed)</p>
-            <p><strong>Required Frames:</strong> {requiredFrames} (optimized)</p>
+            <p><strong>Threshold:</strong> {SIMILARITY_THRESHOLD}% (relaxed)</p>
+            <p><strong>Mode:</strong> Single-frame instant verification</p>
           </div>
         </div>
       )}
 
       {/* Error Alert */}
       {error && (
-        <div className="w-full max-w-md bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="w-full max-w-sm bg-red-50 border border-red-200 rounded-lg p-3">
           <div className="flex items-center space-x-2">
-            <AlertCircle size={20} className="text-red-600" />
+            <AlertCircle size={16} className="text-red-600" />
             <div className="flex-1">
-              <p className="font-medium text-red-800">Verification Error</p>
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="font-medium text-red-800 text-sm">Verification Error</p>
+              <p className="text-xs text-red-600">{error}</p>
             </div>
-            {canRetry && (
-              <button
-                onClick={handleRestart}
-                className="ml-2 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
-              >
-                Retry
-              </button>
-            )}
+            <button
+              onClick={handleRestart}
+              className="ml-2 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}
 
-      {/* Verification Results - matches backend response structure exactly */}
+      {/* Verification Results */}
       {success && verificationResult && (
-        <div className={`w-full max-w-md ${verificationResult.verified ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-4`}>
-          <div className="flex items-center space-x-2 mb-3">
+        <div className={`w-full max-w-sm ${verificationResult.verified ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-3`}>
+          <div className="flex items-center space-x-2 mb-2">
             {verificationResult.verified ? (
-              <CheckCircle size={20} className="text-green-600" />
+              <CheckCircle size={16} className="text-green-600" />
             ) : (
-              <AlertCircle size={20} className="text-red-600" />
+              <AlertCircle size={16} className="text-red-600" />
             )}
-            <p className={`font-medium ${verificationResult.verified ? 'text-green-800' : 'text-red-800'}`}>
-              {verificationResult.verified ? 'Verification Successful!' : 'Verification Failed!'}
+            <p className={`font-medium text-sm ${verificationResult.verified ? 'text-green-800' : 'text-red-800'}`}>
+              {verificationResult.verified ? 'Instant Verification Passed!' : 'Verification Failed!'}
             </p>
           </div>
-          <div className={`text-sm ${verificationResult.verified ? 'text-green-700' : 'text-red-700'} space-y-1`}>
+          <div className={`text-xs ${verificationResult.verified ? 'text-green-700' : 'text-red-700'} space-y-1`}>
             <p><strong>User:</strong> {verificationResult.user_name}</p>
-            <p><strong>Similarity Score:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
-            {verificationResult.max_similarity_score && (
-              <p><strong>Best Match:</strong> {verificationResult.max_similarity_score?.toFixed(1)}%</p>
-            )}
-            <p><strong>Quality Score:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
-            <p><strong>Anti-spoofing:</strong> {(verificationResult.antispoofing_score * 100)?.toFixed(1)}%</p>
-            {verificationResult.match_ratio !== undefined && (
-              <p><strong>Match Ratio:</strong> {(verificationResult.match_ratio * 100)?.toFixed(1)}%</p>
-            )}
-            {verificationResult.confidence_score !== undefined && (
-              <p><strong>Confidence:</strong> {verificationResult.confidence_score?.toFixed(1)}%</p>
-            )}
-            <p><strong>Frames Processed:</strong> {verificationResult.frames_processed}</p>
-            <p><strong>Threshold Used:</strong> {verificationResult.threshold_used || SIMILARITY_THRESHOLD}%</p>
-            <p><strong>Method:</strong> {verificationResult.verification_method || 'optimized_stream'}</p>
+            <p><strong>Similarity:</strong> {verificationResult.similarity_score?.toFixed(1)}%</p>
+            <p><strong>Quality:</strong> {verificationResult.quality_score?.toFixed(1)}%</p>
+            <p><strong>Processing:</strong> {verificationResult.processing_time?.toFixed(0)}ms</p>
+            <p><strong>Total Time:</strong> {verificationResult.total_session_time?.toFixed(0)}ms</p>
+            <p><strong>Mode:</strong> {verificationResult.mode}</p>
+            <p><strong>Threshold:</strong> {verificationResult.threshold_used}%</p>
             {verificationResult.verification_id && (
-              <p><strong>Verification ID:</strong> {verificationResult.verification_id}</p>
+              <p><strong>ID:</strong> {verificationResult.verification_id}</p>
             )}
           </div>
         </div>
       )}
 
-      {/* Optimized Instructions */}
-      <div className="w-full max-w-md bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center space-x-2 mb-3">
-          <Shield size={20} className="text-blue-600" />
-          <p className="font-medium text-blue-800">Fast Verification (Optimized)</p>
+      {/* Speed Features */}
+      <div className="w-full max-w-sm bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="flex items-center space-x-2 mb-2">
+          <Zap size={16} className="text-blue-600" />
+          <p className="font-medium text-blue-800 text-sm">Instant Verification Features</p>
         </div>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Only {requiredFrames} frames needed for verification</li>
-          <li>• Relaxed {SIMILARITY_THRESHOLD}% similarity threshold</li>
-          <li>• Multiple retry attempts allowed</li>
-          <li>• Auto-reconnection on network issues</li>
-          <li>• Look directly at camera and stay still</li>
-          <li>• Faster processing for quiz access</li>
-          <li>• Multi-criteria matching for better success rate</li>
+        <ul className="text-xs text-blue-700 space-y-1">
+          <li>• Single-frame verification (instant)</li>
+          <li>• 240x180 optimized processing</li>
+          <li>• 200ms capture interval</li>
+          <li>• Relaxed {SIMILARITY_THRESHOLD}% threshold</li>
+          <li>• No quality checks (speed priority)</li>
+          <li>• Expected completion: &lt;1 second</li>
+          <li>• Ultra-low latency WebSocket</li>
         </ul>
       </div>
 
@@ -783,4 +556,4 @@ const RealTimeFaceVerification: React.FC<RealTimeFaceVerificationProps> = ({
   )
 }
 
-export default RealTimeFaceVerification
+export default OptimizedFaceVerification
